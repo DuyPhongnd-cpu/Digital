@@ -112,6 +112,7 @@ def get_default_data():
         "tv_incidents": [
             {
                 "STT": 1,
+                "Ngày": "01/09/2026",
                 "Tên kênh/nhóm kênh (Đường truyền)": "VTV3 / VTV CAB",
                 "Hiện tượng": "Vỡ hình nhẹ",
                 "Bắt đầu": "09:00",
@@ -355,7 +356,7 @@ def generate_excel_a4_report(current_shift_info):
 
     # MỤC 1: SỰ CỐ TRUYỀN HÌNH
     write_section_title(7, "1. TRUYỀN HÌNH (SỰ CỐ VÀ ĐƯỜNG TRUYỀN)")
-    tv_cols = ["STT", "Tên kênh/nhóm kênh (Đường truyền)", "Hiện tượng", "Bắt đầu", "Kết thúc", "Thời lượng", "Nguyên nhân", "Biện pháp khắc phục (Bên khắc phục)"]
+    tv_cols = ["STT", "Ngày", "Tên kênh/nhóm kênh (Đường truyền)", "Hiện tượng", "Bắt đầu", "Kết thúc", "Thời lượng", "Nguyên nhân", "Biện pháp khắc phục (Bên khắc phục)"]
     next_r = write_table_data(8, tv_cols, st.session_state.tv_incidents) + 1
 
     # MỤC 2: ĐIỀU HÒA
@@ -646,35 +647,21 @@ if st.sidebar.button("🔄 TẢI LẠI DỮ LIỆU TỪ MÁY CHỦ", use_contain
     st.rerun()
 
 
+
 # ---------------------------------------------------------
-# TIỆN ÍCH LIÊN HỆ ONLINE (ZALO & VIBER + QR CODE)
+# TIỆN ÍCH LIÊN HỆ ONLINE (THU GỌN)
 # ---------------------------------------------------------
 HOTLINE_NUMBER = "0913332569"
 PHONE_INTERNATIONAL = "84913332569"
 
-zalo_link = f"https://zalo.me/{HOTLINE_NUMBER}"
-viber_link = f"viber://chat?number=%2B{PHONE_INTERNATIONAL}"
-
-qr_zalo_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://zalo.me/{HOTLINE_NUMBER}"
-qr_viber_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=viber://chat?number=%2B{PHONE_INTERNATIONAL}"
-
 st.sidebar.divider()
-st.sidebar.markdown("### 💬 HỖ TRỢ & TRAO ĐỔI TRỰC TUYẾN")
-st.sidebar.info(f"📞 **Hotline Kỹ thuật:** `{HOTLINE_NUMBER}`")
-
-col_zalo, col_viber = st.sidebar.columns(2)
-with col_zalo:
-    st.link_button("💬 Chat Zalo", zalo_link, use_container_width=True)
-with col_viber:
-    st.link_button("🟣 Chat Viber", viber_link, use_container_width=True)
-
-with st.sidebar.expander("📱 Quét mã QR (Zalo / Viber)", expanded=True):
-    st.caption("Quét mã bằng Camera điện thoại để chat ngay:")
-    q_col1, q_col2 = st.columns(2)
-    with q_col1:
-        st.image(qr_zalo_url, caption="QR Zalo", use_container_width=True)
-    with q_col2:
-        st.image(qr_viber_url, caption="QR Viber", use_container_width=True)
+with st.sidebar.expander("💬 Hỗ trợ nhanh Zalo / Viber", expanded=False):
+    st.markdown(f"📞 **Hotline:** `{HOTLINE_NUMBER}`")
+    c_z, c_v = st.columns(2)
+    c_z.link_button("💬 Zalo", f"https://zalo.me/{HOTLINE_NUMBER}", use_container_width=True)
+    c_v.link_button("🟣 Viber", f"viber://chat?number=%2B{PHONE_INTERNATIONAL}", use_container_width=True)
+    st.caption("Quét mã QR trên điện thoại:")
+    st.image(f"https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://zalo.me/{HOTLINE_NUMBER}", caption="QR Zalo 0913332569", use_container_width=True)
 
 menu = st.sidebar.radio(
     "📋 Danh mục Chức năng:",
@@ -683,8 +670,10 @@ menu = st.sidebar.radio(
         "2. Quản lý Phân ca, Duyệt Đổi ca",
         "3. Phân tích Đối soát",
         "4. Quản lý Bảo hành (Sửa chữa & Đổi bảo hành)",
-        "5. Lưu trữ và Tài liệu AI",
-        "6. Nhật ký Hoạt động"
+        "5. Giám sát Luồng Kênh Catchup (HLS Monitor)",
+        "6. Không gian Trao đổi Zalo & Viber (0913332569)",
+        "7. Lưu trữ và Tài liệu AI",
+        "8. Nhật ký Hoạt động"
     ]
 )
 
@@ -780,19 +769,27 @@ if menu == "1. Báo cáo Tổng hợp Ca trực (A4)":
     st.divider()
     
     # ---------------- 1. TRUYỀN HÌNH ----------------
-    st.subheader("1. TRUYỀN HÌNH (Sự cố đường truyền)")
+    st.subheader("1. TRUYỀN HÌNH (Sự cố đường truyền & Giám sát luồng)")
+    
+    with st.expander("📺 Giám sát Trực tiếp Luồng Kênh Catchup (falconhlsmonitor.vtcdigital.top)", expanded=False):
+        c_m_top1, c_m_top2 = st.columns([3, 1])
+        c_m_top1.write("Theo dõi trạng thái phát sóng luồng HLS Catchup trực tiếp:")
+        c_m_top2.link_button("🚀 Mở Cửa Sổ Giám Sát Lớn", "https://falconhlsmonitor.vtcdigital.top/", use_container_width=True)
+        st.components.v1.iframe("https://falconhlsmonitor.vtcdigital.top/", height=500, scrolling=True)
+
     tab_tv_form, tab_tv_table = st.tabs(["📝 Nhập sự cố bằng Form (Tự động tính thời lượng)", "📊 Chỉnh sửa trực tiếp Bảng Sự cố"])
     
     with tab_tv_form:
         with st.form("form_tv_incident"):
             st.markdown("**Khai báo sự cố đường truyền kênh truyền hình:**")
-            c_tv1, c_tv2 = st.columns(2)
+            c_date, c_tv1 = st.columns(2)
+            tv_date = c_date.text_input("🗓️ Ngày xảy ra sự cố:", value=datetime.now().strftime("%d/%m/%Y"))
             tv_channel = c_tv1.text_input("Tên kênh/nhóm kênh (Đường truyền):", value="VTV1 / VTV Cab")
-            tv_symptom = c_tv2.text_input("Hiện tượng sự cố:", value="Mất tín hiệu luồng IP")
             
-            c_tv3, c_tv4 = st.columns(2)
-            time_start = c_tv3.time_input("Thời gian Bắt đầu:", value=time(9, 0))
-            time_end = c_tv4.time_input("Thời gian Kết thúc:", value=time(10, 30))
+            c_tv2, c_tv3, c_tv4 = st.columns([2, 1, 1])
+            tv_symptom = c_tv2.text_input("Hiện tượng sự cố:", value="Mất tín hiệu luồng IP")
+            time_start = c_tv3.time_input("Bắt đầu:", value=time(9, 0))
+            time_end = c_tv4.time_input("Kết thúc:", value=time(10, 30))
             
             c_tv5, c_tv6 = st.columns(2)
             tv_cause = c_tv5.text_input("Nguyên nhân:", value="Lỗi thiết bị Switch truyền dẫn")
@@ -811,6 +808,7 @@ if menu == "1. Báo cáo Tổng hợp Ca trực (A4)":
 
                 new_inc = {
                     "STT": len(st.session_state.tv_incidents) + 1,
+                    "Ngày": tv_date,
                     "Tên kênh/nhóm kênh (Đường truyền)": tv_channel,
                     "Hiện tượng": tv_symptom,
                     "Bắt đầu": time_start.strftime("%H:%M"),
@@ -1186,7 +1184,68 @@ elif menu == "4. Quản lý Bảo hành (Sửa chữa & Đổi bảo hành)":
         st.components.v1.iframe("http://baohanh.truyenhinhso.vn", height=600, scrolling=True)
 
 # MENU 5: LƯU TRỮ VÀ TÀI LIỆU AI
-elif menu == "5. Lưu trữ và Tài liệu AI":
+# MENU 5: GIÁM SÁT LUỒNG KÊNH CATCHUP (HLS MONITOR)
+elif menu == "5. Giám sát Luồng Kênh Catchup (HLS Monitor)":
+    st.title("📺 Giám sát Luồng Kênh Truyền Hình (Falcon HLS Catchup Monitor)")
+    
+    col_c1, col_c2 = st.columns([3, 1])
+    with col_c1:
+        st.info("🔗 **Hệ thống giám sát luồng Catchup:** [https://falconhlsmonitor.vtcdigital.top/](https://falconhlsmonitor.vtcdigital.top/)")
+    with col_c2:
+        st.link_button("🚀 Mở Tab Giám Sát Mới", "https://falconhlsmonitor.vtcdigital.top/", type="primary", use_container_width=True)
+
+    st.markdown("""
+    <style>
+    .monitor-frame {
+        width: 100%;
+        height: 800px;
+        border: 2px solid #1F4E78;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    </style>
+    <iframe src="https://falconhlsmonitor.vtcdigital.top/" class="monitor-frame" allowfullscreen></iframe>
+    """, unsafe_allow_html=True)
+
+# MENU 6: KHÔNG GIAN TRAO ĐỔI ZALO & VIBER (PHONE WORKSPACE)
+elif menu == "6. Không gian Trao đổi Zalo & Viber (0913332569)":
+    st.title("📱 Không Gian Làm Việc Trao Đổi Zalo & Viber trực tuyến")
+    st.caption("Khoang làm việc tích hợp cho số điện thoại Hotline: **0913332569** (Mở ứng dụng Zalo Web & Viber trao đổi nhanh)")
+
+    col_p1, col_p2 = st.columns([1, 2])
+    
+    with col_p1:
+        st.markdown("### 📲 Thông Tin Kết Nối Hotline")
+        st.success("🟢 **Số trực ca:** `0913332569`")
+        
+        st.markdown("#### 1. Đăng nhập Zalo Web trực tiếp:")
+        st.write("Truy cập nhanh phiên bản Zalo Web để nhắn tin, nhận báo cáo và trao đổi nhóm:")
+        st.link_button("🌐 Mở Zalo Web (chat.zalo.me)", "https://chat.zalo.me", type="primary", use_container_width=True)
+        
+        st.markdown("#### 2. Kích hoạt Viber Desktop / App:")
+        st.link_button("🟣 Mở Chat Viber Hotline", "viber://chat?number=%2B84913332569", use_container_width=True)
+
+        st.divider()
+        st.markdown("#### 3. Quét mã QR kết nối nhanh:")
+        st.image("https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=https://zalo.me/0913332569", caption="Quét kết nối Zalo 0913332569", use_container_width=True)
+
+    with col_p2:
+        st.markdown("### 💬 Khung Trình Duyệt Trao Đổi Công Việc (Zalo Web)")
+        st.info("💡 Bạn có thể đăng nhập Zalo Web bằng mã QR hoặc số điện thoại **0913332569** ngay tại khung bên dưới:")
+        
+        # Phone mockup container
+        st.markdown("""
+        <div style="border: 3px solid #2980b9; border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            <div style="background: #2980b9; color: white; padding: 10px 15px; font-weight: bold; display: flex; justify-content: space-between;">
+                <span>📱 ZALO WEB WORKSPACE - NOC VTC (0913332569)</span>
+                <span>🔴 LIVE</span>
+            </div>
+            <iframe src="https://chat.zalo.me" style="width: 100%; height: 680px; border: none;"></iframe>
+        </div>
+        """, unsafe_allow_html=True)
+
+# MENU 7: LƯU TRỮ VÀ TÀI LIỆU AI
+elif menu == "7. Lưu trữ và Tài liệu AI":
     st.title("📂 Hệ thống Lưu trữ & Trợ lý Tra cứu Tài liệu AI")
     
     tab_store, tab_ai = st.tabs(["📁 Kho Lưu Trữ Ổ E:", "🤖 Trợ lý AI Tra Cứu (RAG)"])
@@ -1215,6 +1274,6 @@ elif menu == "5. Lưu trữ và Tài liệu AI":
             st.info(f"🔍 **AI Agent đang tìm kiếm trong `E:\\Tài liệu AI\\` cho câu hỏi: '{query}'**")
 
 # MENU 6: NHẬT KÝ HOẠT ĐỘNG
-elif menu == "6. Nhật ký Hoạt động":
+elif menu == "8. Nhật ký Hoạt động":
     st.title("📝 Nhật ký Hoạt động Hệ thống (Audit Trail)")
     st.dataframe(st.session_state.audit_logs, use_container_width=True)
