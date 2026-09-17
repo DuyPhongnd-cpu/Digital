@@ -645,6 +645,37 @@ if st.sidebar.button("🔄 TẢI LẠI DỮ LIỆU TỪ MÁY CHỦ", use_contain
     st.sidebar.info("🔄 Đã làm mới dữ liệu mới nhất từ máy chủ!")
     st.rerun()
 
+
+# ---------------------------------------------------------
+# TIỆN ÍCH LIÊN HỆ ONLINE (ZALO & VIBER + QR CODE)
+# ---------------------------------------------------------
+HOTLINE_NUMBER = "0913332569"
+PHONE_INTERNATIONAL = "84913332569"
+
+zalo_link = f"https://zalo.me/{HOTLINE_NUMBER}"
+viber_link = f"viber://chat?number=%2B{PHONE_INTERNATIONAL}"
+
+qr_zalo_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://zalo.me/{HOTLINE_NUMBER}"
+qr_viber_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=viber://chat?number=%2B{PHONE_INTERNATIONAL}"
+
+st.sidebar.divider()
+st.sidebar.markdown("### 💬 HỖ TRỢ & TRAO ĐỔI TRỰC TUYẾN")
+st.sidebar.info(f"📞 **Hotline Kỹ thuật:** `{HOTLINE_NUMBER}`")
+
+col_zalo, col_viber = st.sidebar.columns(2)
+with col_zalo:
+    st.link_button("💬 Chat Zalo", zalo_link, use_container_width=True)
+with col_viber:
+    st.link_button("🟣 Chat Viber", viber_link, use_container_width=True)
+
+with st.sidebar.expander("📱 Quét mã QR (Zalo / Viber)", expanded=True):
+    st.caption("Quét mã bằng Camera điện thoại để chat ngay:")
+    q_col1, q_col2 = st.columns(2)
+    with q_col1:
+        st.image(qr_zalo_url, caption="QR Zalo", use_container_width=True)
+    with q_col2:
+        st.image(qr_viber_url, caption="QR Viber", use_container_width=True)
+
 menu = st.sidebar.radio(
     "📋 Danh mục Chức năng:",
     [
