@@ -45,7 +45,59 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 2. HỆ THỐNG LƯU TRỮ DÙNG CHUNG (PERSISTENCE JSON STORAGE)
+# 2. HÀM BÓC TÁCH MA TRẬN LỊCH TRỰC VTC TỪ FILE EXCEL
+# ---------------------------------------------------------
+def parse_vtc_matrix_schedule(uploaded_file):
+    try:
+        df_raw = pd.read_excel(uploaded_file, sheet_name=0, skiprows=2)
+        df_raw.columns = [str(col).strip() for col in df_raw.iloc[0].values]
+        
+        df_data = df_raw.iloc[1:].dropna(subset=['STT']).copy()
+        
+        shift_map = {
+            "ca1": "Ca 1: 07h30 - 14h30",
+            "ca2": "Ca 2: 14h30 - 22h00",
+            "ca3": "Ca 3: 22h00 - 07h30 sáng"
+        }
+        
+        date_cols = [str(i) for i in range(1, 32)]
+        records = []
+        
+        now = datetime.now()
+        month_str = f"{now.month:02d}"
+        year_str = f"{now.year}"
+        
+        for _, row in df_data.iterrows():
+            name = str(row.get('Họ tên/Bộ phận', '')).strip()
+            if not name or name == 'nan':
+                continue
+                
+            for day in date_cols:
+                if day in row:
+                    shift_val = str(row[day]).strip().lower() if pd.notna(row[day]) else ""
+                    if shift_val in shift_map:
+                        day_str = f"{int(day):02d}/{month_str}/{year_str}"
+                        records.append({
+                            "Ngày": day_str,
+                            "Ca trực": shift_map[shift_val],
+                            "Người trực": name,
+                            "Trạm": "Trạm Phát sóng VTC Digital"
+                        })
+                        
+        if not records:
+            return None
+
+        df_result = pd.DataFrame(records)
+        df_grouped = df_result.groupby(["Ngày", "Ca trực", "Trạm"])["Người trực"].apply(lambda x: ", ".join(x)).reset_index()
+        df_grouped['DayNum'] = df_grouped['Ngày'].apply(lambda x: int(x.split('/')[0]))
+        df_grouped = df_grouped.sort_values(by=['DayNum', 'Ca trực']).drop(columns=['DayNum'])
+        return df_grouped
+    except Exception as e:
+        st.error(f"Lỗi đọc file ma trận lịch trực: {e}")
+        return None
+
+# ---------------------------------------------------------
+# 3. HỆ THỐNG LƯU TRỮ DÙNG CHUNG (PERSISTENCE JSON STORAGE)
 # ---------------------------------------------------------
 DATA_FILE = "noc_system_storage.json"
 
@@ -80,36 +132,39 @@ def get_default_data():
                 "Biện pháp khắc phục (Bên khắc phục)": "Hàn lại sợi quang / VTV Cab"
             }
         ],
-        "idc_temp_cams": [
+        "idc_temp_sensors": [
             {
                 "STT": 1,
                 "Khu vực phòng máy": "Phòng Head-end",
-                "Cảm biến / Camera": "Camera 1 (Head-end)",
+                "Cảm biến / Sensor": "Sensor 1 (Head-end)",
                 "Nhiệt độ hiện tại (°C)": "22.5°C",
                 "Độ ẩm (%)": "50%",
                 "Chuẩn IDC tiêu chuẩn": "20°C - 24°C / 45% - 55%",
                 "Đánh giá trạng thái": "🟢 Bình thường - Đạt chuẩn IDC",
-                "Ghi chú": "Làm mát luân phiên 3 ngày ổn định"
+                "Chế độ làm mát": "Chạy luân phiên 3 ngày tịnh tiến",
+                "Ghi chú": "Làm mát luân phiên ổn định"
             },
             {
                 "STT": 2,
                 "Khu vực phòng máy": "Phòng Đối tác",
-                "Cảm biến / Camera": "Camera 2 (Đối tác)",
+                "Cảm biến / Sensor": "Sensor 2 (Đối tác)",
                 "Nhiệt độ hiện tại (°C)": "23.0°C",
                 "Độ ẩm (%)": "52%",
                 "Chuẩn IDC tiêu chuẩn": "20°C - 24°C / 45% - 55%",
                 "Đánh giá trạng thái": "🟢 Bình thường - Đạt chuẩn IDC",
-                "Ghi chú": "Điều hòa chạy ổn định"
+                "Chế độ làm mát": "2 máy chạy tự động",
+                "Ghi chú": "2 máy lạnh chạy tự động ổn định"
             },
             {
                 "STT": 3,
                 "Khu vực phòng máy": "Phòng CA (Bảo mật)",
-                "Cảm biến / Camera": "Camera 3 (Phòng CA)",
+                "Cảm biến / Sensor": "Sensor 3 (Phòng CA)",
                 "Nhiệt độ hiện tại (°C)": "21.8°C",
                 "Độ ẩm (%)": "48%",
                 "Chuẩn IDC tiêu chuẩn": "20°C - 24°C / 45% - 55%",
                 "Đánh giá trạng thái": "🟢 Bình thường - Đạt chuẩn IDC",
-                "Ghi chú": "Hệ thống an toàn tuyệt đối"
+                "Chế độ làm mát": "3 máy chạy tự động",
+                "Ghi chú": "3 máy lạnh chạy tự động an toàn"
             }
         ],
         "hvac_schedule": [
@@ -122,9 +177,9 @@ def get_default_data():
             {"STT": 2, "Tên hệ thống UPS (LAN: 192.168.20.201)": "UPS Máy phát K1H - 02", "Điện áp vào (V)": "382V", "Điện áp ra (V)": "220V", "Mức tải (% Load)": "60%", "Dung lượng Pin (%)": "98%", "Trạng thái": "Bình thường"}
         ],
         "hpa_params": [
-            {"STT": 1, "Thông số HPA (Camera 4)": "HPA Power Level", "Máy phát K1H-VNS1": "18 kW", "Ngưỡng tiêu chuẩn": "17 - 19 kW", "Đánh giá": "Đạt"},
-            {"STT": 2, "Thông số HPA (Camera 4)": "Chỉ số C/N (dBC)", "Máy phát K1H-VNS1": "14.63 dB", "Ngưỡng tiêu chuẩn": "> 14 dB", "Đánh giá": "Đạt"},
-            {"STT": 3, "Thông số HPA (Camera 4)": "Công suất phản xạ (Reflected)", "Máy phát K1H-VNS1": "0.15 kW", "Ngưỡng tiêu chuẩn": "< 0.5 kW", "Đánh giá": "Đạt"}
+            {"STT": 1, "Thông số HPA (Sensor 4)": "HPA Power Level", "Máy phát K1H-VNS1": "18 kW", "Ngưỡng tiêu chuẩn": "17 - 19 kW", "Đánh giá": "Đạt"},
+            {"STT": 2, "Thông số HPA (Sensor 4)": "Chỉ số C/N (dBC)", "Máy phát K1H-VNS1": "14.63 dB", "Ngưỡng tiêu chuẩn": "> 14 dB", "Đánh giá": "Đạt"},
+            {"STT": 3, "Thông số HPA (Sensor 4)": "Công suất phản xạ (Reflected)", "Máy phát K1H-VNS1": "0.15 kW", "Ngưỡng tiêu chuẩn": "< 0.5 kW", "Đánh giá": "Đạt"}
         ],
         "warning_servers": [
             {"STT": 1, "Tên Server": "Server-NOC-03", "Địa chỉ IP": "192.168.10.103", "Dịch vụ": "Kênh VTV3 HD", "CPU Util": "94%", "RAM Util": "82%", "Mức độ Cảnh báo": "🔴 CPU Cao (>92%)", "Biện pháp": "Tối ưu tiến trình transcode"},
@@ -171,7 +226,7 @@ def get_default_data():
             {"STT": 2, "Ngày nhập": "21/09/2026", "Tên khách hàng / Địa chỉ": "Khách lẻ Hải Phòng", "Loại đầu thu": "HDV3", "Mã dịch vụ cũ": "3911654457", "Mã dịch vụ mới": "3922564598", "Người thực hiện": "Nguyễn Vĩnh Toàn", "Ngày trả (hoàn thành)": 1}
         ],
         "ai_chat_history": [
-            {"role": "assistant", "content": "Xin chào! Tôi là Trợ lý AI Phòng Kỹ thuật Công nghệ VTC. Tôi có thể hỗ trợ bạn tra cứu quy trình trực ca, phân tích sự cố kênh truyền hình, tư vấn thông số HPA/UPS và các quy định kỹ thuật. Bạn cần hỗ trợ gì hôm nay?"}
+            {"role": "assistant", "content": "Xin chào! Tôi là Trợ lý AI Phòng Kỹ thuật Công nghệ VTC. Tôi có thể hỗ trợ bạn tra cứu quy trình trực ca, phân tích sự cố kênh truyền hình, tư vấn thông số HPA (Sensor 4)/UPS và các quy định kỹ thuật. Bạn cần hỗ trợ gì hôm nay?"}
         ],
         "audit_logs": [
             {"Thời gian": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Người dùng": "Hệ thống", "Thao tác": "Khởi chạy ứng dụng NOC", "Ghi chú": "Đồng bộ dữ liệu"}
@@ -195,7 +250,7 @@ def save_shared_storage(data=None):
             "master_schedule": st.session_state.master_schedule.to_dict(orient="records") if isinstance(st.session_state.master_schedule, pd.DataFrame) else st.session_state.master_schedule,
             "shift_change_requests": st.session_state.shift_change_requests.to_dict(orient="records") if isinstance(st.session_state.shift_change_requests, pd.DataFrame) else st.session_state.shift_change_requests,
             "tv_incidents": st.session_state.tv_incidents.to_dict(orient="records") if isinstance(st.session_state.tv_incidents, pd.DataFrame) else st.session_state.tv_incidents,
-            "idc_temp_cams": st.session_state.idc_temp_cams.to_dict(orient="records") if isinstance(st.session_state.idc_temp_cams, pd.DataFrame) else st.session_state.idc_temp_cams,
+            "idc_temp_sensors": st.session_state.idc_temp_sensors.to_dict(orient="records") if isinstance(st.session_state.idc_temp_sensors, pd.DataFrame) else st.session_state.idc_temp_sensors,
             "hvac_schedule": st.session_state.hvac_schedule.to_dict(orient="records") if isinstance(st.session_state.hvac_schedule, pd.DataFrame) else st.session_state.hvac_schedule,
             "ups_params": st.session_state.ups_params.to_dict(orient="records") if isinstance(st.session_state.ups_params, pd.DataFrame) else st.session_state.ups_params,
             "hpa_params": st.session_state.hpa_params.to_dict(orient="records") if isinstance(st.session_state.hpa_params, pd.DataFrame) else st.session_state.hpa_params,
@@ -221,8 +276,8 @@ if "shift_change_requests" not in st.session_state:
 if "tv_incidents" not in st.session_state:
     st.session_state.tv_incidents = pd.DataFrame(storage_data.get("tv_incidents", []))
 
-if "idc_temp_cams" not in st.session_state:
-    st.session_state.idc_temp_cams = pd.DataFrame(storage_data.get("idc_temp_cams", get_default_data()["idc_temp_cams"]))
+if "idc_temp_sensors" not in st.session_state:
+    st.session_state.idc_temp_sensors = pd.DataFrame(storage_data.get("idc_temp_sensors", get_default_data()["idc_temp_sensors"]))
 
 if "hvac_schedule" not in st.session_state:
     st.session_state.hvac_schedule = pd.DataFrame(storage_data.get("hvac_schedule", []))
@@ -271,7 +326,7 @@ def add_audit_log(user, action, note=""):
     save_shared_storage()
 
 # ---------------------------------------------------------
-# 3. HÀM TẠO EXCEL BÁO CÁO TỔNG HỢP CA TRỰC A4 (KẺ KHUNG ĐẸP)
+# 4. HÀM TẠO EXCEL BÁO CÁO TỔNG HỢP CA TRỰC A4 (KẺ KHUNG ĐẸP)
 # ---------------------------------------------------------
 def generate_excel_a4_report(current_shift_info):
     wb = openpyxl.Workbook()
@@ -357,17 +412,17 @@ def generate_excel_a4_report(current_shift_info):
     tv_cols = ["STT", "Ngày", "Tên kênh/nhóm kênh (Đường truyền)", "Hiện tượng", "Bắt đầu", "Kết thúc", "Thời lượng", "Nguyên nhân", "Biện pháp khắc phục (Bên khắc phục)"]
     next_r = write_table_data(8, tv_cols, st.session_state.tv_incidents) + 1
 
-    # MỤC 2: NHIỆT ĐỘ PHÒNG MÁY (3 CAMERA & ĐIỀU HÒA LUÂN PHIÊN)
-    write_section_title(next_r, "2. NHIỆT ĐỘ PHÒNG MÁY IDC (3 CAMERA) & ĐIỀU HÒA LUÂN PHIÊN")
-    temp_cols = ["STT", "Khu vực phòng máy", "Cảm biến / Camera", "Nhiệt độ hiện tại (°C)", "Độ ẩm (%)", "Chuẩn IDC tiêu chuẩn", "Đánh giá trạng thái", "Ghi chú"]
-    next_r = write_table_data(next_r + 1, temp_cols, st.session_state.idc_temp_cams) + 1
+    # MỤC 2: NHIỆT ĐỘ PHÒNG MÁY (3 SENSOR & ĐIỀU HÒA LUÂN PHIÊN / TỰ ĐỘNG)
+    write_section_title(next_r, "2. NHIỆT ĐỘ PHÒNG MÁY IDC (3 SENSOR) & HỆ THỐNG LÀM MÁT")
+    temp_cols = ["STT", "Khu vực phòng máy", "Cảm biến / Sensor", "Nhiệt độ hiện tại (°C)", "Độ ẩm (%)", "Chuẩn IDC tiêu chuẩn", "Đánh giá trạng thái", "Chế độ làm mát", "Ghi chú"]
+    next_r = write_table_data(next_r + 1, temp_cols, st.session_state.idc_temp_sensors) + 1
 
-    # MỤC 3: HỆ THỐNG UPS VÀ HPA (LAN: 192.168.20.201 & CAMERA 4)
-    write_section_title(next_r, "3. HỆ THỐNG UPS (LAN 192.168.20.201) & MÁY PHÁT HPA (CAMERA 4)")
+    # MỤC 3: HỆ THỐNG UPS VÀ HPA (LAN: 192.168.20.201 & SENSOR 4)
+    write_section_title(next_r, "3. HỆ THỐNG UPS (LAN 192.168.20.201) & MÁY PHÁT HPA (SENSOR 4)")
     ups_cols = ["STT", "Tên hệ thống UPS (LAN: 192.168.20.201)", "Điện áp vào (V)", "Điện áp ra (V)", "Mức tải (% Load)", "Dung lượng Pin (%)", "Trạng thái"]
     next_r = write_table_data(next_r + 1, ups_cols, st.session_state.ups_params) + 1
 
-    hpa_cols = ["STT", "Thông số HPA (Camera 4)", "Máy phát K1H-VNS1", "Ngưỡng tiêu chuẩn", "Đánh giá"]
+    hpa_cols = ["STT", "Thông số HPA (Sensor 4)", "Máy phát K1H-VNS1", "Ngưỡng tiêu chuẩn", "Đánh giá"]
     next_r = write_table_data(next_r + 1, hpa_cols, st.session_state.hpa_params) + 1
 
     # MỤC 4: SERVER CẢNH BÁO VÀ MẠNG VĂN PHÒNG (2 MODEM SPEEDTEST)
@@ -392,7 +447,7 @@ def generate_excel_a4_report(current_shift_info):
     return output.getvalue()
 
 # ---------------------------------------------------------
-# 4. HÀM TẠO EXCEL BÁO CÁO BẢO HÀNH A4
+# 5. HÀM TẠO EXCEL BÁO CÁO BẢO HÀNH A4
 # ---------------------------------------------------------
 def generate_combined_warranty_excel():
     wb = openpyxl.Workbook()
@@ -581,7 +636,7 @@ def send_email_notification(from_email, to_email, subject, body_text, attachment
         return False, f"⚠️ Lỗi gửi mail: {e}"
 
 # ---------------------------------------------------------
-# 5. THANH BÊN (SIDEBAR) & CÁC NÚT ĐỒNG BỘ
+# 6. THANH BÊN (SIDEBAR) & CÁC NÚT ĐỒNG BỘ
 # ---------------------------------------------------------
 st.sidebar.markdown("### CÔNG TY VTC DỊCH VỤ TRUYỀN HÌNH SỐ")
 st.sidebar.markdown("### 🤖 AI PHÒNG KỸ THUẬT CÔNG NGHỆ")
@@ -631,7 +686,7 @@ with col_sync2:
         st.session_state.master_schedule = pd.DataFrame(refreshed.get("master_schedule", []))
         st.session_state.shift_change_requests = pd.DataFrame(refreshed.get("shift_change_requests", []))
         st.session_state.tv_incidents = pd.DataFrame(refreshed.get("tv_incidents", []))
-        st.session_state.idc_temp_cams = pd.DataFrame(refreshed.get("idc_temp_cams", []))
+        st.session_state.idc_temp_sensors = pd.DataFrame(refreshed.get("idc_temp_sensors", []))
         st.session_state.hvac_schedule = pd.DataFrame(refreshed.get("hvac_schedule", []))
         st.session_state.ups_params = pd.DataFrame(refreshed.get("ups_params", []))
         st.session_state.hpa_params = pd.DataFrame(refreshed.get("hpa_params", []))
@@ -708,11 +763,11 @@ if menu == "1. Giám sát Kênh, Sự cố, Nhiệt độ, UPS/HPA, Server & M�
 
     # THÔNG TIN CA TRỰC HIỆN TẠI
     st.subheader("📌 Thông tin ca trực hiện tại")
-    available_dates = list(st.session_state.master_schedule["Ngày"].unique())
+    available_dates = list(st.session_state.master_schedule["Ngày"].unique()) if not st.session_state.master_schedule.empty else ["21/09/2026"]
     col_sel1, col_sel2 = st.columns(2)
     selected_date = col_sel1.selectbox("🗓️ Chọn Ngày trực:", available_dates if available_dates else ["21/09/2026"])
     
-    shifts_in_date = list(st.session_state.master_schedule[st.session_state.master_schedule["Ngày"] == selected_date]["Ca trực"].unique())
+    shifts_in_date = list(st.session_state.master_schedule[st.session_state.master_schedule["Ngày"] == selected_date]["Ca trực"].unique()) if not st.session_state.master_schedule.empty else ["Ca 1: 07h30 - 14h30"]
     selected_shift = col_sel2.selectbox("⏰ Chọn Ca trực:", shifts_in_date if shifts_in_date else ["Ca 1: 07h30 - 14h30"])
 
     match_row = st.session_state.master_schedule[
@@ -772,7 +827,6 @@ if menu == "1. Giám sát Kênh, Sự cố, Nhiệt độ, UPS/HPA, Server & M�
         st.caption("Dashboard giám sát luồng phát sóng: [https://falconhlsmonitor.vtcdigital.top/](https://falconhlsmonitor.vtcdigital.top/)")
         st.link_button("🚀 Mở Tab Giám sát Riêng", "https://falconhlsmonitor.vtcdigital.top/", use_container_width=True)
         
-        # Nhúng Iframe 1/2 khoảng không web
         st.markdown("""
         <div style="border: 2px solid #1F4E78; border-radius: 8px; overflow: hidden;">
             <iframe src="https://falconhlsmonitor.vtcdigital.top/" style="width: 100%; height: 420px; border: none;"></iframe>
@@ -837,37 +891,43 @@ if menu == "1. Giám sát Kênh, Sự cố, Nhiệt độ, UPS/HPA, Server & M�
     st.divider()
 
     # ---------------------------------------------------------
-    # MENU 1.3: NHIỆT ĐỘ PHÒNG MÁY (3 CAMERA & ĐIỀU HÒA LUÂN PHIÊN)
+    # MENU 1.3: NHIỆT ĐỘ PHÒNG MÁY (3 SENSOR) & ĐIỀU HÒA LUÂN PHIÊN / TỰ ĐỘNG
     # ---------------------------------------------------------
-    st.subheader("🌡️ Menu 1.3: Nhiệt Độ Phòng Máy IDC (3 Camera) & Điều Hòa Luân Phiên")
+    st.subheader("🌡️ Menu 1.3: Nhiệt Độ Phòng Máy IDC (3 Sensor) & Hệ Thống Làm Mát")
     st.markdown("""
     * **Chuẩn nhiệt độ IDC tiêu chuẩn:** `20°C - 24°C`  |  **Độ ẩm tiêu chuẩn:** `45% - 55%`
-    * **Camera 1:** Phòng Head-end (Có lịch chạy luân phiên điều hòa 3 ngày)
-    * **Camera 2:** Phòng Đối tác
-    * **Camera 3:** Phòng CA (Bảo mật)
+    * **Sensor 1:** Phòng Head-end (Có lịch chạy luân phiên điều hòa 3 ngày tịnh tiến)
+    * **Sensor 2:** Phòng Đối tác (2 máy điều hòa chạy tự động)
+    * **Sensor 3:** Phòng CA (3 máy điều hòa chạy tự động)
     """)
 
     col_cam1, col_cam2, col_cam3 = st.columns(3)
     with col_cam1:
-        st.markdown("<div class='metric-card'><h4>📷 Camera 1: Phòng Head-end</h4><h2>22.5 °C | 50%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>🔄 Làm mát luân phiên: Máy 1-2-3</p></div>", unsafe_allow_html=True)
+        st.markdown("<div class='metric-card'><h4>🌡️ Sensor 1: Phòng Head-end</h4><h2>22.5 °C | 50%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>🔄 Làm mát: Chạy luân phiên 3 ngày</p></div>", unsafe_allow_html=True)
     with col_cam2:
-        st.markdown("<div class='metric-card'><h4>📷 Camera 2: Phòng Đối tác</h4><h2>23.0 °C | 52%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>❄️ Làm mát: Máy 1 Chạy ổn định</p></div>", unsafe_allow_html=True)
+        st.markdown("<div class='metric-card'><h4>🌡️ Sensor 2: Phòng Đối tác</h4><h2>23.0 °C | 52%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>❄️ Làm mát: 2 máy chạy tự động</p></div>", unsafe_allow_html=True)
     with col_cam3:
-        st.markdown("<div class='metric-card'><h4>📷 Camera 3: Phòng CA</h4><h2>21.8 °C | 48%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>🔒 An toàn hệ thống CA</p></div>", unsafe_allow_html=True)
+        st.markdown("<div class='metric-card'><h4>🌡️ Sensor 3: Phòng CA</h4><h2>21.8 °C | 48%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>❄️ Làm mát: 3 máy chạy tự động</p></div>", unsafe_allow_html=True)
 
-    tab_temp1, tab_temp2 = st.tabs(["📊 Bảng Chuẩn Nhiệt Độ 3 Camera IDC", "🔄 Lịch Chạy Luân Phiên Điều Hòa (Phòng Head-end)"])
+    tab_temp1, tab_temp2 = st.tabs(["📊 Bảng Chuẩn Nhiệt Độ 3 Sensor IDC", "🔄 Lịch Chạy Luân Phiên Điều Hòa (Phòng Head-end)"])
     with tab_temp1:
-        st.session_state.idc_temp_cams = st.data_editor(st.session_state.idc_temp_cams, num_rows="dynamic", use_container_width=True, key="ed_idc_temp")
+        st.session_state.idc_temp_sensors = st.data_editor(st.session_state.idc_temp_sensors, num_rows="dynamic", use_container_width=True, key="ed_idc_temp")
+        if st.button("💾 Lưu Bảng Nhiệt Độ Sensor", key="btn_save_sensor_temp"):
+            save_shared_storage()
+            st.success("✅ Đã lưu thông số cảm biến nhiệt độ!")
     with tab_temp2:
         st.caption("🔄 Chu kỳ tịnh tiến 3 ngày xoay vòng các tổ máy điều hòa phòng Head-end:")
         st.session_state.hvac_schedule = st.data_editor(st.session_state.hvac_schedule, num_rows="dynamic", use_container_width=True, key="ed_hvac_headend")
+        if st.button("💾 Lưu Lịch Chạy Luân Phiên", key="btn_save_hvac"):
+            save_shared_storage()
+            st.success("✅ Đã lưu lịch điều hòa luân phiên!")
 
     st.divider()
 
     # ---------------------------------------------------------
-    # MENU 1.4: HỆ THỐNG UPS VÀ HPA
+    # MENU 1.4: HỆ THỐNG UPS VÀ HPA (SENSOR 4)
     # ---------------------------------------------------------
-    st.subheader("⚡ Menu 1.4: Hệ Thống UPS (LAN: 192.168.20.201) & Máy Phát HPA (Camera 4)")
+    st.subheader("⚡ Menu 1.4: Hệ Thống UPS (LAN: 192.168.20.201) & Máy Phát HPA (Sensor 4)")
     
     col_u1, col_u2 = st.columns([3, 1])
     with col_u1:
@@ -875,12 +935,18 @@ if menu == "1. Giám sát Kênh, Sự cố, Nhiệt độ, UPS/HPA, Server & M�
     with col_u2:
         st.link_button("🌐 Mở UPS LAN 192.168.20.201", "http://192.168.20.201", use_container_width=True)
 
-    tab_ups, tab_hpa = st.tabs(["🔋 Thông Số Hệ Thống UPS (LAN)", "📡 Thông Số Máy Phát HPA (Camera 4)"])
+    tab_ups, tab_hpa = st.tabs(["🔋 Thông Số Hệ Thống UPS (LAN)", "📡 Thông Số Máy Phát HPA (Sensor 4)"])
     with tab_ups:
         st.session_state.ups_params = st.data_editor(st.session_state.ups_params, num_rows="dynamic", use_container_width=True, key="ed_ups_params")
+        if st.button("💾 Lưu Thông Số UPS", key="btn_save_ups"):
+            save_shared_storage()
+            st.success("✅ Đã lưu thông số UPS!")
     with tab_hpa:
-        st.caption("Giám sát chỉ số công suất máy phát HPA truyền hình qua Camera 4:")
+        st.caption("Giám sát chỉ số công suất máy phát HPA truyền hình qua Sensor 4:")
         st.session_state.hpa_params = st.data_editor(st.session_state.hpa_params, num_rows="dynamic", use_container_width=True, key="ed_hpa_params")
+        if st.button("💾 Lưu Thông Số HPA (Sensor 4)", key="btn_save_hpa"):
+            save_shared_storage()
+            st.success("✅ Đã lưu thông số Sensor 4 HPA!")
 
     st.divider()
 
@@ -891,6 +957,9 @@ if menu == "1. Giám sát Kênh, Sự cố, Nhiệt độ, UPS/HPA, Server & M�
     
     st.markdown("#### 🚨 Danh Sách Server Đang Có Cảnh Báo (Tối Ưu Gọn - Chỉ Hiện Cảnh Báo)")
     st.session_state.warning_servers = st.data_editor(st.session_state.warning_servers, num_rows="dynamic", use_container_width=True, key="ed_warning_servers")
+    if st.button("💾 Lưu Danh Sách Server Cảnh Báo", key="btn_save_srv"):
+        save_shared_storage()
+        st.success("✅ Đã lưu danh sách cảnh báo máy chủ!")
 
     st.markdown("#### 🚀 Bảng Đo Tốc Độ & Kiểm Soát 2 Đường Truyền Mạng Văn Phòng (Dạng Speedtest)")
     
@@ -915,6 +984,9 @@ if menu == "1. Giám sát Kênh, Sự cố, Nhiệt độ, UPS/HPA, Server & M�
         """, unsafe_allow_html=True)
 
     st.session_state.speedtest_networks = st.data_editor(st.session_state.speedtest_networks, num_rows="dynamic", use_container_width=True, key="ed_speedtest")
+    if st.button("💾 Lưu Thông Số Mạng Speedtest", key="btn_save_net"):
+        save_shared_storage()
+        st.success("✅ Đã lưu thông số tốc độ mạng!")
 
 # =========================================================
 # MENU 2: QUẢN LÝ PHÂN CA, ĐỔI CA, KHÔNG GIAN TRAO ĐỔI & ĐỐI SOÁT
@@ -942,8 +1014,10 @@ elif menu == "2. Quản lý Phân ca, Đổi ca, Không gian Trao đổi & Đố
         with sub_tab_req:
             with st.form("form_shift_change"):
                 c1, c2 = st.columns(2)
-                r_date = c1.selectbox("Ngày trực:", st.session_state.master_schedule["Ngày"].unique())
-                r_shift = c2.selectbox("Ca trực:", st.session_state.master_schedule[st.session_state.master_schedule["Ngày"] == r_date]["Ca trực"].unique())
+                available_d = list(st.session_state.master_schedule["Ngày"].unique()) if not st.session_state.master_schedule.empty else ["21/09/2026"]
+                r_date = c1.selectbox("Ngày trực:", available_d)
+                shifts_in_d = list(st.session_state.master_schedule[st.session_state.master_schedule["Ngày"] == r_date]["Ca trực"].unique()) if not st.session_state.master_schedule.empty else ["Ca 1: 07h30 - 14h30"]
+                r_shift = c2.selectbox("Ca trực:", shifts_in_d)
                 
                 c3, c4 = st.columns(2)
                 r_from = c3.text_input("Người xin đổi:")
@@ -1007,9 +1081,19 @@ elif menu == "2. Quản lý Phân ca, Đổi ca, Không gian Trao đổi & Đố
                 st.error("🔒 Cần đăng nhập Mật khẩu Lãnh đạo Phòng để phê duyệt.")
 
         with sub_tab_up:
-            up_file = st.file_uploader("Chọn file Excel phân ca trực mới (.xlsx):", type=["xlsx", "xls"])
-            if up_file:
-                st.info("File đã sẵn sàng xử lý bóc tách ma trận.")
+            st.subheader("Upload & Tự Động Đồng Bộ Lịch Trực VTC (.xlsx)")
+            up_file = st.file_uploader("Chọn file Excel ma trận công/lịch trực (.xlsx, .xls):", type=["xlsx", "xls"])
+            if up_file is not None:
+                parsed_df = parse_vtc_matrix_schedule(up_file)
+                if parsed_df is not None:
+                    st.success("✅ Đã bóc tách thành công ma trận Lịch trực VTC!")
+                    st.dataframe(parsed_df, use_container_width=True)
+                    if st.button("🔥 LƯU & TỰ ĐỘNG ĐỒNG BỘ LỊCH TRỰC TOÀN HỆ THỐNG", type="primary", use_container_width=True):
+                        st.session_state.master_schedule = parsed_df
+                        save_shared_storage()
+                        add_audit_log(user_role, "Upload & Cập nhật Lịch trực Master mới", f"Tổng cộng {len(parsed_df)} ca trực")
+                        st.success("🎉 ĐÃ ĐỒNG BỘ THÀNH CÔNG! Thông tin ca trực hiện tại ở Menu 1 và Menu 2.1 đã được cập nhật ngay lập tức.")
+                        st.rerun()
 
     # 2.3 ĐĂNG NHẬP ZALO VÀ VIBER (TRAO ĐỔI VỚI ĐỐI TÁC)
     with tab_m2_3:
@@ -1222,9 +1306,8 @@ elif menu == "4. Lưu trữ và Phân tích AI":
 
     with tab_ai:
         st.subheader("🤖 Trợ Lý AI Phòng Kỹ Thuật Công Nghệ VTC")
-        st.caption("Trợ lý AI phân tích sự cố, tra cứu quy chuẩn kỹ thuật, kiểm tra thông số HPA/UPS và giải đáp thắc mắc:")
+        st.caption("Trợ lý AI phân tích sự cố, tra cứu quy chuẩn kỹ thuật, kiểm tra thông số HPA (Sensor 4)/UPS và giải đáp thắc mắc:")
 
-        # Hiển thị lịch sử chat
         for msg in st.session_state.ai_chat_history:
             if msg["role"] == "user":
                 with st.chat_message("user"):
@@ -1233,20 +1316,17 @@ elif menu == "4. Lưu trữ và Phân tích AI":
                 with st.chat_message("assistant", avatar="🤖"):
                     st.write(msg["content"])
 
-        # Ô nhập câu hỏi
         user_prompt = st.chat_input("Nhập câu hỏi kỹ thuật hoặc yêu cầu phân tích sự cố...")
         if user_prompt:
-            # Lưu câu hỏi người dùng
             st.session_state.ai_chat_history.append({"role": "user", "content": user_prompt})
             with st.chat_message("user"):
                 st.write(user_prompt)
 
-            # Phân tích & Tạo câu trả lời thông minh dựa trên ngữ cảnh hệ thống VTC NOC
             p_lower = user_prompt.lower()
-            if "hpa" in p_lower or "máy phát" in p_lower:
-                ai_reply = "📡 **Phân tích thông số HPA:** Hệ thống máy phát K1H-VNS1 hiện hoạt động ở mức công suất 18 kW (ngưỡng tiêu chuẩn 17 - 19 kW), chỉ số C/N đạt 14.63 dB (>14 dB) và công suất phản xạ 0.15 kW (<0.5 kW). Tất cả thông số đều đạt tiêu chuẩn kỹ thuật phát sóng qua vệ tinh."
-            elif "nhiệt độ" in p_lower or "điều hòa" in p_lower or "idc" in p_lower:
-                ai_reply = "🌡️ **Đánh giá nhiệt độ phòng máy IDC:** Cả 3 phòng (Head-end qua Cam 1: 22.5°C, Đối tác qua Cam 2: 23.0°C, Phòng CA qua Cam 3: 21.8°C) đều nằm trong dải chuẩn IDC (20°C - 24°C, độ ẩm 45% - 55%). Phòng Head-end đang áp dụng chu kỳ luân phiên 3 ngày tịnh tiến."
+            if "hpa" in p_lower or "máy phát" in p_lower or "sensor 4" in p_lower:
+                ai_reply = "📡 **Phân tích thông số HPA (Sensor 4):** Hệ thống máy phát K1H-VNS1 hiện hoạt động ở mức công suất 18 kW (ngưỡng tiêu chuẩn 17 - 19 kW), chỉ số C/N đạt 14.63 dB (>14 dB) và công suất phản xạ 0.15 kW (<0.5 kW). Tất cả thông số đều đạt tiêu chuẩn kỹ thuật phát sóng qua vệ tinh."
+            elif "nhiệt độ" in p_lower or "điều hòa" in p_lower or "sensor" in p_lower or "idc" in p_lower:
+                ai_reply = "🌡️ **Đánh giá nhiệt độ phòng máy IDC (Sensor 1, 2, 3):**\n- **Sensor 1 (Head-end):** 22.5°C | 50% (Đạt chuẩn IDC, làm mát luân phiên 3 ngày tịnh tiến).\n- **Sensor 2 (Đối tác):** 23.0°C | 52% (Đạt chuẩn IDC, 2 máy điều hòa chạy tự động).\n- **Sensor 3 (Phòng CA):** 21.8°C | 48% (Đạt chuẩn IDC, 3 máy điều hòa chạy tự động an toàn bảo mật).\nTất cả đều nằm trong dải chuẩn IDC (20°C - 24°C, độ ẩm 45% - 55%)."
             elif "ups" in p_lower or "điện" in p_lower:
                 ai_reply = "🔋 **Thông số UPS (192.168.20.201):** Hệ thống UPS Phụ tải NOC - 01 và UPS Máy phát K1H - 02 đang hoạt động ổn định, tải từ 45% - 60%, dung lượng ắc quy 98% - 100%, điện áp ra 220V ổn định."
             elif "server" in p_lower or "máy chủ" in p_lower:
