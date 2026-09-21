@@ -28,9 +28,10 @@ st.markdown("""
     .metric-card {
         background-color: #F4F7FA;
         border-left: 5px solid #1F4E78;
-        padding: 12px;
-        border-radius: 6px;
+        padding: 14px;
+        border-radius: 8px;
         margin-bottom: 10px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
     .speedtest-box {
         background: #101426;
@@ -40,6 +41,7 @@ st.markdown("""
         font-family: monospace;
         text-align: center;
         margin-bottom: 10px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -102,16 +104,21 @@ def parse_vtc_matrix_schedule(uploaded_file):
 DATA_FILE = "noc_system_storage.json"
 
 def get_default_data():
+    now_str = datetime.now().strftime("%d/%m/%Y")
     return {
+        "active_shift_state": {
+            "selected_date": now_str,
+            "selected_shift": "Ca 1: 07h30 - 14h30"
+        },
         "master_schedule": [
-            {"Ngày": "21/09/2026", "Ca trực": "Ca 1: 07h30 - 14h30", "Người trực": "Bùi Trọng Vinh, Trần Đức Chiến", "Trạm": "Trạm Phát sóng VTC Digital"},
-            {"Ngày": "21/09/2026", "Ca trực": "Ca 2: 14h30 - 22h00", "Người trực": "Nguyễn Văn Đông, Trương Nhật Minh", "Trạm": "Trạm Phát sóng VTC Digital"},
-            {"Ngày": "21/09/2026", "Ca trực": "Ca 3: 22h00 - 07h30 sáng", "Người trực": "Nguyễn Văn Kiên, Võ Bảo Quang", "Trạm": "Trạm Phát sóng VTC Digital"}
+            {"Ngày": now_str, "Ca trực": "Ca 1: 07h30 - 14h30", "Người trực": "Bùi Trọng Vinh, Trần Đức Chiến", "Trạm": "Trạm Phát sóng VTC Digital"},
+            {"Ngày": now_str, "Ca trực": "Ca 2: 14h30 - 22h00", "Người trực": "Nguyễn Văn Đông, Trương Nhật Minh", "Trạm": "Trạm Phát sóng VTC Digital"},
+            {"Ngày": now_str, "Ca trực": "Ca 3: 22h00 - 07h30 sáng", "Người trực": "Nguyễn Văn Kiên, Võ Bảo Quang", "Trạm": "Trạm Phát sóng VTC Digital"}
         ],
         "shift_change_requests": [
             {
                 "Mã GD": "DC001",
-                "Ngày": "21/09/2026",
+                "Ngày": now_str,
                 "Ca trực": "Ca 1: 07h30 - 14h30",
                 "Người xin đổi": "Bùi Trọng Vinh",
                 "Người trực thay": "Vũ Quốc Minh",
@@ -122,7 +129,7 @@ def get_default_data():
         "tv_incidents": [
             {
                 "STT": 1,
-                "Ngày": "21/09/2026",
+                "Ngày": now_str,
                 "Tên kênh/nhóm kênh (Đường truyền)": "VTV3 / VTV CAB",
                 "Hiện tượng": "Vỡ hình nhẹ",
                 "Bắt đầu": "09:00",
@@ -137,8 +144,8 @@ def get_default_data():
                 "STT": 1,
                 "Khu vực phòng máy": "Phòng Head-end",
                 "Cảm biến / Sensor": "Sensor 1 (Head-end)",
-                "Nhiệt độ hiện tại (°C)": "22.5°C",
-                "Độ ẩm (%)": "50%",
+                "Nhiệt độ hiện tại (°C)": "22.5",
+                "Độ ẩm (%)": "50",
                 "Chuẩn IDC tiêu chuẩn": "20°C - 24°C / 45% - 55%",
                 "Đánh giá trạng thái": "🟢 Bình thường - Đạt chuẩn IDC",
                 "Chế độ làm mát": "Chạy luân phiên 3 ngày tịnh tiến",
@@ -148,8 +155,8 @@ def get_default_data():
                 "STT": 2,
                 "Khu vực phòng máy": "Phòng Đối tác",
                 "Cảm biến / Sensor": "Sensor 2 (Đối tác)",
-                "Nhiệt độ hiện tại (°C)": "23.0°C",
-                "Độ ẩm (%)": "52%",
+                "Nhiệt độ hiện tại (°C)": "23.0",
+                "Độ ẩm (%)": "52",
                 "Chuẩn IDC tiêu chuẩn": "20°C - 24°C / 45% - 55%",
                 "Đánh giá trạng thái": "🟢 Bình thường - Đạt chuẩn IDC",
                 "Chế độ làm mát": "2 máy chạy tự động",
@@ -159,8 +166,8 @@ def get_default_data():
                 "STT": 3,
                 "Khu vực phòng máy": "Phòng CA (Bảo mật)",
                 "Cảm biến / Sensor": "Sensor 3 (Phòng CA)",
-                "Nhiệt độ hiện tại (°C)": "21.8°C",
-                "Độ ẩm (%)": "48%",
+                "Nhiệt độ hiện tại (°C)": "21.8",
+                "Độ ẩm (%)": "48",
                 "Chuẩn IDC tiêu chuẩn": "20°C - 24°C / 45% - 55%",
                 "Đánh giá trạng thái": "🟢 Bình thường - Đạt chuẩn IDC",
                 "Chế độ làm mát": "3 máy chạy tự động",
@@ -168,13 +175,13 @@ def get_default_data():
             }
         ],
         "hvac_schedule": [
-            {"Ngày / Tuần": "21/09/2026", "Thời gian (Time)": "08:00 - 20:00", "Chu kỳ": "Ngày 1", "Máy chạy (Chính)": "Máy 1 – Máy 2 – Máy 3", "Máy nghỉ (Dự phòng)": "Máy 4 – Máy 5 – Máy 6 – Máy 7 – Máy 8", "Ghi chú / Trạng thái": "Hoạt động ổn định"},
+            {"Ngày / Tuần": now_str, "Thời gian (Time)": "08:00 - 20:00", "Chu kỳ": "Ngày 1", "Máy chạy (Chính)": "Máy 1 – Máy 2 – Máy 3", "Máy nghỉ (Dự phòng)": "Máy 4 – Máy 5 – Máy 6 – Máy 7 – Máy 8", "Ghi chú / Trạng thái": "Hoạt động ổn định"},
             {"Ngày / Tuần": "22/09/2026", "Thời gian (Time)": "08:00 - 20:00", "Chu kỳ": "Ngày 2", "Máy chạy (Chính)": "Máy 4 – Máy 5 – Máy 6", "Máy nghỉ (Dự phòng)": "Máy 1 – Máy 2 – Máy 3 – Máy 7 – Máy 8", "Ghi chú / Trạng thái": "Dự phòng bình thường"},
             {"Ngày / Tuần": "23/09/2026", "Thời gian (Time)": "08:00 - 20:00", "Chu kỳ": "Ngày 3", "Máy chạy (Chính)": "Máy 7 – Máy 8 – Máy 1", "Máy nghỉ (Dự phòng)": "Máy 2 – Máy 3 – Máy 4 – Máy 5 – Máy 6", "Ghi chú / Trạng thái": "Chuyển chu kỳ tịnh tiến"}
         ],
         "ups_params": [
-            {"STT": 1, "Tên hệ thống UPS (LAN: 192.168.20.201)": "UPS Phụ tải NOC - 01", "Điện áp vào (V)": "380V", "Điện áp ra (V)": "220V", "Mức tải (% Load)": "45%", "Dung lượng Pin (%)": "100%", "Trạng thái": "Bình thường"},
-            {"STT": 2, "Tên hệ thống UPS (LAN: 192.168.20.201)": "UPS Máy phát K1H - 02", "Điện áp vào (V)": "382V", "Điện áp ra (V)": "220V", "Mức tải (% Load)": "60%", "Dung lượng Pin (%)": "98%", "Trạng thái": "Bình thường"}
+            {"STT": 1, "Tên hệ thống UPS (LAN: 192.168.20.201)": "UPS NOC - 01", "Điện áp vào (V)": "380V", "Điện áp ra (V)": "220V", "Dòng điện (A)": "24.5 A", "Mức tải (% Load)": "45%", "Dung lượng Pin (%)": "100%", "Trạng thái": "Bình thường"},
+            {"STT": 2, "Tên hệ thống UPS (LAN: 192.168.20.201)": "UPS NOC - 02", "Điện áp vào (V)": "382V", "Điện áp ra (V)": "220V", "Dòng điện (A)": "32.0 A", "Mức tải (% Load)": "60%", "Dung lượng Pin (%)": "98%", "Trạng thái": "Bình thường"}
         ],
         "hpa_params": [
             {"STT": 1, "Thông số HPA (Sensor 4)": "HPA Power Level", "Máy phát K1H-VNS1": "18 kW", "Ngưỡng tiêu chuẩn": "17 - 19 kW", "Đánh giá": "Đạt"},
@@ -192,20 +199,18 @@ def get_default_data():
             {
                 "STT": 1,
                 "Tên Modem / Dải mạng": "Modem Phòng Trực (NOC)",
-                "Dải IP tĩnh": "192.168.121.xxx",
                 "Ping / Latency": "2 ms",
-                "Download (Mbps)": "485.6 Mbps",
-                "Upload (Mbps)": "490.2 Mbps",
+                "Download (Mbps)": "485.6",
+                "Upload (Mbps)": "490.2",
                 "Độ ổn định (Jitter)": "1 ms",
                 "Trạng thái": "🟢 Rất tốt (Đạt chuẩn)"
             },
             {
                 "STT": 2,
                 "Tên Modem / Dải mạng": "Modem Văn Phòng",
-                "Dải IP tĩnh": "192.168.1.xxx",
                 "Ping / Latency": "4 ms",
-                "Download (Mbps)": "320.4 Mbps",
-                "Upload (Mbps)": "315.8 Mbps",
+                "Download (Mbps)": "320.4",
+                "Upload (Mbps)": "315.8",
                 "Độ ổn định (Jitter)": "2 ms",
                 "Trạng thái": "🟢 Bình thường"
             }
@@ -218,12 +223,12 @@ def get_default_data():
             "period": "từ 21.09.2026 đến 25.09.2026"
         },
         "warranty_repair_data": [
-            {"STT": 1, "Ngày nhập": "21/09/2026", "Loại đầu thu": "HDV2", "Mã dịch vụ": "4256419426", "Sửa chữa / Thay thế": "Nguồn", "Tình trạng Bảo hành": "Còn", "Ngày trả (hoàn thành)": 1},
-            {"STT": 2, "Ngày nhập": "21/09/2026", "Loại đầu thu": "HDV3", "Mã dịch vụ": "4256419427", "Sửa chữa / Thay thế": "Tuner", "Tình trạng Bảo hành": "Hết", "Ngày trả (hoàn thành)": 1}
+            {"STT": 1, "Ngày nhập": now_str, "Loại đầu thu": "HDV2", "Mã dịch vụ": "4256419426", "Sửa chữa / Thay thế": "Nguồn", "Tình trạng Bảo hành": "Còn", "Ngày trả (hoàn thành)": 1},
+            {"STT": 2, "Ngày nhập": now_str, "Loại đầu thu": "HDV3", "Mã dịch vụ": "4256419427", "Sửa chữa / Thay thế": "Tuner", "Tình trạng Bảo hành": "Hết", "Ngày trả (hoàn thành)": 1}
         ],
         "warranty_exchange_data": [
-            {"STT": 1, "Ngày nhập": "21/09/2026", "Tên khách hàng / Địa chỉ": "Đại lý Hà Nội", "Loại đầu thu": "HDV2", "Mã dịch vụ cũ": "3912784969", "Mã dịch vụ mới": "3922395612", "Người thực hiện": "Nguyễn Vĩnh Toàn", "Ngày trả (hoàn thành)": 1},
-            {"STT": 2, "Ngày nhập": "21/09/2026", "Tên khách hàng / Địa chỉ": "Khách lẻ Hải Phòng", "Loại đầu thu": "HDV3", "Mã dịch vụ cũ": "3911654457", "Mã dịch vụ mới": "3922564598", "Người thực hiện": "Nguyễn Vĩnh Toàn", "Ngày trả (hoàn thành)": 1}
+            {"STT": 1, "Ngày nhập": now_str, "Tên khách hàng / Địa chỉ": "Đại lý Hà Nội", "Loại đầu thu": "HDV2", "Mã dịch vụ cũ": "3912784969", "Mã dịch vụ mới": "3922395612", "Người thực hiện": "Nguyễn Vĩnh Toàn", "Ngày trả (hoàn thành)": 1},
+            {"STT": 2, "Ngày nhập": now_str, "Tên khách hàng / Địa chỉ": "Khách lẻ Hải Phòng", "Loại đầu thu": "HDV3", "Mã dịch vụ cũ": "3911654457", "Mã dịch vụ mới": "3922564598", "Người thực hiện": "Nguyễn Vĩnh Toàn", "Ngày trả (hoàn thành)": 1}
         ],
         "ai_chat_history": [
             {"role": "assistant", "content": "Xin chào! Tôi là Trợ lý AI Phòng Kỹ thuật Công nghệ VTC. Tôi có thể hỗ trợ bạn tra cứu quy trình trực ca, phân tích sự cố kênh truyền hình, tư vấn thông số HPA (Sensor 4)/UPS và các quy định kỹ thuật. Bạn cần hỗ trợ gì hôm nay?"}
@@ -247,6 +252,7 @@ def load_shared_storage():
 def save_shared_storage(data=None):
     if data is None:
         data = {
+            "active_shift_state": st.session_state.get("active_shift_state", {"selected_date": datetime.now().strftime("%d/%m/%Y"), "selected_shift": "Ca 1: 07h30 - 14h30"}),
             "master_schedule": st.session_state.master_schedule.to_dict(orient="records") if isinstance(st.session_state.master_schedule, pd.DataFrame) else st.session_state.master_schedule,
             "shift_change_requests": st.session_state.shift_change_requests.to_dict(orient="records") if isinstance(st.session_state.shift_change_requests, pd.DataFrame) else st.session_state.shift_change_requests,
             "tv_incidents": st.session_state.tv_incidents.to_dict(orient="records") if isinstance(st.session_state.tv_incidents, pd.DataFrame) else st.session_state.tv_incidents,
@@ -267,6 +273,9 @@ def save_shared_storage(data=None):
 
 storage_data = load_shared_storage()
 
+if "active_shift_state" not in st.session_state:
+    st.session_state.active_shift_state = storage_data.get("active_shift_state", {"selected_date": datetime.now().strftime("%d/%m/%Y"), "selected_shift": "Ca 1: 07h30 - 14h30"})
+
 if "master_schedule" not in st.session_state:
     st.session_state.master_schedule = pd.DataFrame(storage_data.get("master_schedule", []))
 
@@ -283,7 +292,7 @@ if "hvac_schedule" not in st.session_state:
     st.session_state.hvac_schedule = pd.DataFrame(storage_data.get("hvac_schedule", []))
 
 if "ups_params" not in st.session_state:
-    st.session_state.ups_params = pd.DataFrame(storage_data.get("ups_params", []))
+    st.session_state.ups_params = pd.DataFrame(storage_data.get("ups_params", get_default_data()["ups_params"]))
 
 if "hpa_params" not in st.session_state:
     st.session_state.hpa_params = pd.DataFrame(storage_data.get("hpa_params", get_default_data()["hpa_params"]))
@@ -419,7 +428,7 @@ def generate_excel_a4_report(current_shift_info):
 
     # MỤC 3: HỆ THỐNG UPS VÀ HPA (LAN: 192.168.20.201 & SENSOR 4)
     write_section_title(next_r, "3. HỆ THỐNG UPS (LAN 192.168.20.201) & MÁY PHÁT HPA (SENSOR 4)")
-    ups_cols = ["STT", "Tên hệ thống UPS (LAN: 192.168.20.201)", "Điện áp vào (V)", "Điện áp ra (V)", "Mức tải (% Load)", "Dung lượng Pin (%)", "Trạng thái"]
+    ups_cols = ["STT", "Tên hệ thống UPS (LAN: 192.168.20.201)", "Điện áp vào (V)", "Điện áp ra (V)", "Dòng điện (A)", "Mức tải (% Load)", "Dung lượng Pin (%)", "Trạng thái"]
     next_r = write_table_data(next_r + 1, ups_cols, st.session_state.ups_params) + 1
 
     hpa_cols = ["STT", "Thông số HPA (Sensor 4)", "Máy phát K1H-VNS1", "Ngưỡng tiêu chuẩn", "Đánh giá"]
@@ -430,7 +439,7 @@ def generate_excel_a4_report(current_shift_info):
     srv_cols = ["STT", "Tên Server", "Địa chỉ IP", "Dịch vụ", "CPU Util", "RAM Util", "Mức độ Cảnh báo", "Biện pháp"]
     next_r = write_table_data(next_r + 1, srv_cols, st.session_state.warning_servers) + 1
 
-    net_cols = ["STT", "Tên Modem / Dải mạng", "Dải IP tĩnh", "Ping / Latency", "Download (Mbps)", "Upload (Mbps)", "Độ ổn định (Jitter)", "Trạng thái"]
+    net_cols = ["STT", "Tên Modem / Dải mạng", "Ping / Latency", "Download (Mbps)", "Upload (Mbps)", "Độ ổn định (Jitter)", "Trạng thái"]
     next_r = write_table_data(next_r + 1, net_cols, st.session_state.speedtest_networks) + 2
 
     ws.cell(row=next_r, column=2, value="NGƯỜI LẬP BÁO CÁO (KỸ SƯ TRỰC CA)").font = font_body_bold
@@ -683,6 +692,7 @@ with col_sync1:
 with col_sync2:
     if st.button("🔄 Tải lại", use_container_width=True, help="Làm mới dữ liệu từ máy chủ"):
         refreshed = load_shared_storage()
+        st.session_state.active_shift_state = refreshed.get("active_shift_state", st.session_state.active_shift_state)
         st.session_state.master_schedule = pd.DataFrame(refreshed.get("master_schedule", []))
         st.session_state.shift_change_requests = pd.DataFrame(refreshed.get("shift_change_requests", []))
         st.session_state.tv_incidents = pd.DataFrame(refreshed.get("tv_incidents", []))
@@ -731,7 +741,7 @@ def render_email_login_header(email_key, title_label):
     with st.expander(f"🔑 Cấu hình Đăng nhập Tài khoản Email: {st.session_state[email_key]['email']}", expanded=not st.session_state[email_key]["is_logged_in"]):
         col_m1, col_m2, col_m3 = st.columns([2, 2, 1])
         col_m1.text_input("Địa chỉ Email gửi:", value=st.session_state[email_key]["email"], disabled=True, key=f"inp_email_{email_key}")
-        email_pass = col_m2.text_input("Mật khẩu Email / App Password:", type="password", key=f"inp_pass_{email_key}")
+        email_pass = st.text_input("Mật khẩu Email / App Password:", type="password", key=f"inp_pass_{email_key}")
         
         st.write("")
         if st.session_state[email_key]["is_logged_in"]:
@@ -761,14 +771,30 @@ if menu == "1. Giám sát Kênh, Sự cố, Nhiệt độ, UPS/HPA, Server & M�
     render_email_login_header("email_noc_login", "NOC Mail")
     st.divider()
 
-    # THÔNG TIN CA TRỰC HIỆN TẠI
+    # THÔNG TIN CA TRỰC HIỆN TẠI (LƯU VĨNH VIỄN KHÔNG BỊ TRỞ VỀ NGÀY CŨ)
     st.subheader("📌 Thông tin ca trực hiện tại")
-    available_dates = list(st.session_state.master_schedule["Ngày"].unique()) if not st.session_state.master_schedule.empty else ["21/09/2026"]
+    
+    available_dates = list(st.session_state.master_schedule["Ngày"].unique()) if not st.session_state.master_schedule.empty else [datetime.now().strftime("%d/%m/%Y")]
+    
+    # Lấy ngày đã lưu trước đó trong active_shift_state
+    saved_date = st.session_state.active_shift_state.get("selected_date", available_dates[0])
+    date_index = available_dates.index(saved_date) if saved_date in available_dates else 0
+    
     col_sel1, col_sel2 = st.columns(2)
-    selected_date = col_sel1.selectbox("🗓️ Chọn Ngày trực:", available_dates if available_dates else ["21/09/2026"])
+    selected_date = col_sel1.selectbox("🗓️ Chọn Ngày trực:", available_dates, index=date_index, key="sb_sel_date")
     
     shifts_in_date = list(st.session_state.master_schedule[st.session_state.master_schedule["Ngày"] == selected_date]["Ca trực"].unique()) if not st.session_state.master_schedule.empty else ["Ca 1: 07h30 - 14h30"]
-    selected_shift = col_sel2.selectbox("⏰ Chọn Ca trực:", shifts_in_date if shifts_in_date else ["Ca 1: 07h30 - 14h30"])
+    saved_shift = st.session_state.active_shift_state.get("selected_shift", shifts_in_date[0])
+    shift_index = shifts_in_date.index(saved_shift) if saved_shift in shifts_in_date else 0
+    
+    selected_shift = col_sel2.selectbox("⏰ Chọn Ca trực:", shifts_in_date, index=shift_index, key="sb_sel_shift")
+
+    # Tự động lưu lựa chọn ngày/ca vào active_shift_state để lưu vĩnh viễn
+    if (st.session_state.active_shift_state.get("selected_date") != selected_date or 
+        st.session_state.active_shift_state.get("selected_shift") != selected_shift):
+        st.session_state.active_shift_state["selected_date"] = selected_date
+        st.session_state.active_shift_state["selected_shift"] = selected_shift
+        save_shared_storage()
 
     match_row = st.session_state.master_schedule[
         (st.session_state.master_schedule["Ngày"] == selected_date) & 
@@ -896,25 +922,43 @@ if menu == "1. Giám sát Kênh, Sự cố, Nhiệt độ, UPS/HPA, Server & M�
     st.subheader("🌡️ Menu 1.3: Nhiệt Độ Phòng Máy IDC (3 Sensor) & Hệ Thống Làm Mát")
     st.markdown("""
     * **Chuẩn nhiệt độ IDC tiêu chuẩn:** `20°C - 24°C`  |  **Độ ẩm tiêu chuẩn:** `45% - 55%`
-    * **Sensor 1:** Phòng Head-end (Có lịch chạy luân phiên điều hòa 3 ngày tịnh tiến)
-    * **Sensor 2:** Phòng Đối tác (2 máy điều hòa chạy tự động)
-    * **Sensor 3:** Phòng CA (3 máy điều hòa chạy tự động)
+    * **Sensor 1:** Phòng Head-end (Lịch chạy luân phiên 3 ngày tịnh tiến)
+    * **Sensor 2:** Phòng Đối tác (2 máy chạy tự động)
+    * **Sensor 3:** Phòng CA (3 máy chạy tự động)
     """)
+
+    # ĐỌC TRỰC TIẾP TỪ BẢNG SENSOR ĐỂ RENDER 3 THẺ TỰ ĐỘNG CẬP NHẬT KHI NHẬP TAY
+    df_sensors = st.session_state.idc_temp_sensors
+    s1_temp = df_sensors.iloc[0]["Nhiệt độ hiện tại (°C)"] if len(df_sensors) > 0 else "22.5"
+    s1_hum = df_sensors.iloc[0]["Độ ẩm (%)"] if len(df_sensors) > 0 else "50"
+    s1_cool = df_sensors.iloc[0].get("Chế độ làm mát", "Chạy luân phiên 3 ngày tịnh tiến") if len(df_sensors) > 0 else "Chạy luân phiên 3 ngày tịnh tiến"
+
+    s2_temp = df_sensors.iloc[1]["Nhiệt độ hiện tại (°C)"] if len(df_sensors) > 1 else "23.0"
+    s2_hum = df_sensors.iloc[1]["Độ ẩm (%)"] if len(df_sensors) > 1 else "52"
+    s2_cool = df_sensors.iloc[1].get("Chế độ làm mát", "2 máy chạy tự động") if len(df_sensors) > 1 else "2 máy chạy tự động"
+
+    s3_temp = df_sensors.iloc[2]["Nhiệt độ hiện tại (°C)"] if len(df_sensors) > 2 else "21.8"
+    s3_hum = df_sensors.iloc[2]["Độ ẩm (%)"] if len(df_sensors) > 2 else "48"
+    s3_cool = df_sensors.iloc[2].get("Chế độ làm mát", "3 máy chạy tự động") if len(df_sensors) > 2 else "3 máy chạy tự động"
 
     col_cam1, col_cam2, col_cam3 = st.columns(3)
     with col_cam1:
-        st.markdown("<div class='metric-card'><h4>🌡️ Sensor 1: Phòng Head-end</h4><h2>22.5 °C | 50%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>🔄 Làm mát: Chạy luân phiên 3 ngày</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card'><h4>🌡️ Sensor 1: Phòng Head-end</h4><h2>{s1_temp} °C | {s1_hum}%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>🔄 Làm mát: {s1_cool}</p></div>", unsafe_allow_html=True)
     with col_cam2:
-        st.markdown("<div class='metric-card'><h4>🌡️ Sensor 2: Phòng Đối tác</h4><h2>23.0 °C | 52%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>❄️ Làm mát: 2 máy chạy tự động</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card'><h4>🌡️ Sensor 2: Phòng Đối tác</h4><h2>{s2_temp} °C | {s2_hum}%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>❄️ Làm mát: {s2_cool}</p></div>", unsafe_allow_html=True)
     with col_cam3:
-        st.markdown("<div class='metric-card'><h4>🌡️ Sensor 3: Phòng CA</h4><h2>21.8 °C | 48%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>❄️ Làm mát: 3 máy chạy tự động</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card'><h4>🌡️ Sensor 3: Phòng CA</h4><h2>{s3_temp} °C | {s3_hum}%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>❄️ Làm mát: {s3_cool}</p></div>", unsafe_allow_html=True)
 
     tab_temp1, tab_temp2 = st.tabs(["📊 Bảng Chuẩn Nhiệt Độ 3 Sensor IDC", "🔄 Lịch Chạy Luân Phiên Điều Hòa (Phòng Head-end)"])
     with tab_temp1:
-        st.session_state.idc_temp_sensors = st.data_editor(st.session_state.idc_temp_sensors, num_rows="dynamic", use_container_width=True, key="ed_idc_temp")
-        if st.button("💾 Lưu Bảng Nhiệt Độ Sensor", key="btn_save_sensor_temp"):
+        st.caption("✍️ Nhập trực tiếp nhiệt độ/độ ẩm vào bảng dưới -> Các thẻ chỉ số bên trên sẽ tự động cập nhật theo tức thì:")
+        edited_sensors = st.data_editor(st.session_state.idc_temp_sensors, num_rows="dynamic", use_container_width=True, key="ed_idc_temp")
+        if st.button("💾 LƯU BẢNG NHIỆT ĐỘ SENSOR & CẬP NHẬT THẺ", type="primary", key="btn_save_sensor_temp"):
+            st.session_state.idc_temp_sensors = edited_sensors
             save_shared_storage()
-            st.success("✅ Đã lưu thông số cảm biến nhiệt độ!")
+            st.success("✅ Đã lưu và tự động cập nhật thẻ chỉ số Sensor nhiệt độ!")
+            st.rerun()
+
     with tab_temp2:
         st.caption("🔄 Chu kỳ tịnh tiến 3 ngày xoay vòng các tổ máy điều hòa phòng Head-end:")
         st.session_state.hvac_schedule = st.data_editor(st.session_state.hvac_schedule, num_rows="dynamic", use_container_width=True, key="ed_hvac_headend")
@@ -935,12 +979,13 @@ if menu == "1. Giám sát Kênh, Sự cố, Nhiệt độ, UPS/HPA, Server & M�
     with col_u2:
         st.link_button("🌐 Mở UPS LAN 192.168.20.201", "http://192.168.20.201", use_container_width=True)
 
-    tab_ups, tab_hpa = st.tabs(["🔋 Thông Số Hệ Thống UPS (LAN)", "📡 Thông Số Máy Phát HPA (Sensor 4)"])
+    tab_ups, tab_hpa = st.tabs(["🔋 Thông Số Hệ Thống UPS (LAN: UPS NOC - 01 & UPS NOC - 02)", "📡 Thông Số Máy Phát HPA (Sensor 4)"])
     with tab_ups:
+        st.caption("Nhập thông số điện áp, dòng điện (Ampe), mức tải và dung lượng pin hệ thống UPS:")
         st.session_state.ups_params = st.data_editor(st.session_state.ups_params, num_rows="dynamic", use_container_width=True, key="ed_ups_params")
         if st.button("💾 Lưu Thông Số UPS", key="btn_save_ups"):
             save_shared_storage()
-            st.success("✅ Đã lưu thông số UPS!")
+            st.success("✅ Đã lưu thông số UPS (kèm dòng điện Ampe)!")
     with tab_hpa:
         st.caption("Giám sát chỉ số công suất máy phát HPA truyền hình qua Sensor 4:")
         st.session_state.hpa_params = st.data_editor(st.session_state.hpa_params, num_rows="dynamic", use_container_width=True, key="ed_hpa_params")
@@ -963,30 +1008,49 @@ if menu == "1. Giám sát Kênh, Sự cố, Nhiệt độ, UPS/HPA, Server & M�
 
     st.markdown("#### 🚀 Bảng Đo Tốc Độ & Kiểm Soát 2 Đường Truyền Mạng Văn Phòng (Dạng Speedtest)")
     
+    # ĐỌC TRỰC TIẾP TỪ BẢNG SPEEDTEST ĐỂ TỰ ĐỘNG THAY ĐỔI BOX SPEEDTEST KHI NHẬP TAY
+    df_net = st.session_state.speedtest_networks
+    m1_name = df_net.iloc[0]["Tên Modem / Dải mạng"] if len(df_net) > 0 else "Modem Phòng Trực (NOC)"
+    m1_down = df_net.iloc[0]["Download (Mbps)"] if len(df_net) > 0 else "485.6"
+    m1_up = df_net.iloc[0]["Upload (Mbps)"] if len(df_net) > 0 else "490.2"
+    m1_ping = df_net.iloc[0]["Ping / Latency"] if len(df_net) > 0 else "2 ms"
+    m1_jit = df_net.iloc[0]["Độ ổn định (Jitter)"] if len(df_net) > 0 else "1 ms"
+    m1_stt = df_net.iloc[0]["Trạng thái"] if len(df_net) > 0 else "🟢 Rất tốt (Đạt chuẩn)"
+
+    m2_name = df_net.iloc[1]["Tên Modem / Dải mạng"] if len(df_net) > 1 else "Modem Văn Phòng"
+    m2_down = df_net.iloc[1]["Download (Mbps)"] if len(df_net) > 1 else "320.4"
+    m2_up = df_net.iloc[1]["Upload (Mbps)"] if len(df_net) > 1 else "315.8"
+    m2_ping = df_net.iloc[1]["Ping / Latency"] if len(df_net) > 1 else "4 ms"
+    m2_jit = df_net.iloc[1]["Độ ổn định (Jitter)"] if len(df_net) > 1 else "2 ms"
+    m2_stt = df_net.iloc[1]["Trạng thái"] if len(df_net) > 1 else "🟢 Bình thường"
+
     col_sp1, col_sp2 = st.columns(2)
     with col_sp1:
-        st.markdown("""
+        st.markdown(f"""
         <div class="speedtest-box">
-            <h4 style="color:#00FFCC;">📶 MODEM PHÒNG TRỰC (IP TĨNH: 192.168.121.xxx)</h4>
-            <h1>485.6 <span style="font-size:16px;">Mbps</span></h1>
-            <p>Ping: <b>2 ms</b> | Upload: <b>490.2 Mbps</b> | Jitter: <b>1 ms</b></p>
-            <span style="color:#00FF66;">● HOẠT ĐỘNG HOÀN HẢO</span>
+            <h4 style="color:#00FFCC;">📶 {m1_name.upper()}</h4>
+            <h1>{m1_down} <span style="font-size:16px;">Mbps (Down)</span></h1>
+            <p>Ping: <b>{m1_ping}</b> | Upload: <b>{m1_up} Mbps</b> | Jitter: <b>{m1_jit}</b></p>
+            <span style="color:#00FF66;">● {m1_stt}</span>
         </div>
         """, unsafe_allow_html=True)
     with col_sp2:
-        st.markdown("""
+        st.markdown(f"""
         <div class="speedtest-box">
-            <h4 style="color:#00FFCC;">🏢 MODEM VĂN PHÒNG (IP TĨNH: 192.168.1.xxx)</h4>
-            <h1>320.4 <span style="font-size:16px;">Mbps</span></h1>
-            <p>Ping: <b>4 ms</b> | Upload: <b>315.8 Mbps</b> | Jitter: <b>2 ms</b></p>
-            <span style="color:#00FF66;">● KẾT NỐI ỔN ĐỊNH</span>
+            <h4 style="color:#00FFCC;">🏢 {m2_name.upper()}</h4>
+            <h1>{m2_down} <span style="font-size:16px;">Mbps (Down)</span></h1>
+            <p>Ping: <b>{m2_ping}</b> | Upload: <b>{m2_up} Mbps</b> | Jitter: <b>{m2_jit}</b></p>
+            <span style="color:#00FF66;">● {m2_stt}</span>
         </div>
         """, unsafe_allow_html=True)
 
-    st.session_state.speedtest_networks = st.data_editor(st.session_state.speedtest_networks, num_rows="dynamic", use_container_width=True, key="ed_speedtest")
-    if st.button("💾 Lưu Thông Số Mạng Speedtest", key="btn_save_net"):
+    st.caption("✍️ Nhập trực tiếp Download/Upload hoặc Ping/Jitter vào bảng dưới -> Thẻ Speedtest bên trên sẽ tự động cập nhật theo:")
+    edited_net = st.data_editor(st.session_state.speedtest_networks, num_rows="dynamic", use_container_width=True, key="ed_speedtest")
+    if st.button("💾 LƯU THÔNG SỐ SPEEDTEST & CẬP NHẬT THẺ", type="primary", key="btn_save_net"):
+        st.session_state.speedtest_networks = edited_net
         save_shared_storage()
-        st.success("✅ Đã lưu thông số tốc độ mạng!")
+        st.success("✅ Đã lưu và tự động cập nhật thông số thẻ Speedtest mạng!")
+        st.rerun()
 
 # =========================================================
 # MENU 2: QUẢN LÝ PHÂN CA, ĐỔI CA, KHÔNG GIAN TRAO ĐỔI & ĐỐI SOÁT
@@ -1014,7 +1078,7 @@ elif menu == "2. Quản lý Phân ca, Đổi ca, Không gian Trao đổi & Đố
         with sub_tab_req:
             with st.form("form_shift_change"):
                 c1, c2 = st.columns(2)
-                available_d = list(st.session_state.master_schedule["Ngày"].unique()) if not st.session_state.master_schedule.empty else ["21/09/2026"]
+                available_d = list(st.session_state.master_schedule["Ngày"].unique()) if not st.session_state.master_schedule.empty else [datetime.now().strftime("%d/%m/%Y")]
                 r_date = c1.selectbox("Ngày trực:", available_d)
                 shifts_in_d = list(st.session_state.master_schedule[st.session_state.master_schedule["Ngày"] == r_date]["Ca trực"].unique()) if not st.session_state.master_schedule.empty else ["Ca 1: 07h30 - 14h30"]
                 r_shift = c2.selectbox("Ca trực:", shifts_in_d)
@@ -1090,6 +1154,12 @@ elif menu == "2. Quản lý Phân ca, Đổi ca, Không gian Trao đổi & Đố
                     st.dataframe(parsed_df, use_container_width=True)
                     if st.button("🔥 LƯU & TỰ ĐỘNG ĐỒNG BỘ LỊCH TRỰC TOÀN HỆ THỐNG", type="primary", use_container_width=True):
                         st.session_state.master_schedule = parsed_df
+                        # Cập nhật ngày đầu tiên của lịch vào active_shift_state
+                        if not parsed_df.empty:
+                            first_day = parsed_df.iloc[0]["Ngày"]
+                            first_shift = parsed_df.iloc[0]["Ca trực"]
+                            st.session_state.active_shift_state["selected_date"] = first_day
+                            st.session_state.active_shift_state["selected_shift"] = first_shift
                         save_shared_storage()
                         add_audit_log(user_role, "Upload & Cập nhật Lịch trực Master mới", f"Tổng cộng {len(parsed_df)} ca trực")
                         st.success("🎉 ĐÃ ĐỒNG BỘ THÀNH CÔNG! Thông tin ca trực hiện tại ở Menu 1 và Menu 2.1 đã được cập nhật ngay lập tức.")
@@ -1328,7 +1398,7 @@ elif menu == "4. Lưu trữ và Phân tích AI":
             elif "nhiệt độ" in p_lower or "điều hòa" in p_lower or "sensor" in p_lower or "idc" in p_lower:
                 ai_reply = "🌡️ **Đánh giá nhiệt độ phòng máy IDC (Sensor 1, 2, 3):**\n- **Sensor 1 (Head-end):** 22.5°C | 50% (Đạt chuẩn IDC, làm mát luân phiên 3 ngày tịnh tiến).\n- **Sensor 2 (Đối tác):** 23.0°C | 52% (Đạt chuẩn IDC, 2 máy điều hòa chạy tự động).\n- **Sensor 3 (Phòng CA):** 21.8°C | 48% (Đạt chuẩn IDC, 3 máy điều hòa chạy tự động an toàn bảo mật).\nTất cả đều nằm trong dải chuẩn IDC (20°C - 24°C, độ ẩm 45% - 55%)."
             elif "ups" in p_lower or "điện" in p_lower:
-                ai_reply = "🔋 **Thông số UPS (192.168.20.201):** Hệ thống UPS Phụ tải NOC - 01 và UPS Máy phát K1H - 02 đang hoạt động ổn định, tải từ 45% - 60%, dung lượng ắc quy 98% - 100%, điện áp ra 220V ổn định."
+                ai_reply = "🔋 **Thông số UPS (192.168.20.201):** Hệ thống UPS NOC - 01 (Dòng điện ~24.5A, tải 45%) và UPS NOC - 02 (Dòng điện ~32.0A, tải 60%) đang hoạt động ổn định, dung lượng ắc quy 98% - 100%, điện áp ra 220V chuẩn."
             elif "server" in p_lower or "máy chủ" in p_lower:
                 ai_reply = "🚨 **Cảnh báo Server:** Có 5 máy chủ cần lưu ý trong ca trực: Server-NOC-03 (CPU 94%), Server-NOC-08 (Disk 98%), Server-NOC-12 (RAM 91%), Server-NOC-19 (Nhiệt độ CPU 82°C) và Server-NOC-27 (Ping timeout nhẹ)."
             else:
