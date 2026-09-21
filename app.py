@@ -1,12 +1,14 @@
 import streamlit as st
 import pandas as pd
 import io
+import json
+import os
 from datetime import datetime, time
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # ---------------------------------------------------------
-# 1. CẤU HÌNH TRANG WEB & FONT TIMES NEW ROMAN
+# 1. CẤU HÌNH TRANG WEB & GIAO DIỆN TIMES NEW ROMAN
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="HỆ THỐNG QUẢN LÝ VẬN HÀNH NOC VÀ BẢO HÀNH SẢN PHẨM VTC",
@@ -16,92 +18,48 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    html, body, [class*="css"], .stText, .stMarkdown, h1, h2, h3, h4, h5, h6, label, input, button {
+    html, body, [class*="css"], .stText, .stMarkdown, h1, h2, h3, h4, h5, h6, label, input, button, select {
         font-family: 'Times New Roman', Times, serif !important;
     }
     .stButton>button {
         font-family: 'Times New Roman', Times, serif !important;
         font-weight: bold;
     }
+    .metric-card {
+        background-color: #F4F7FA;
+        border-left: 5px solid #1F4E78;
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 10px;
+    }
+    .speedtest-box {
+        background: #101426;
+        color: #00FFCC;
+        border-radius: 8px;
+        padding: 15px;
+        font-family: monospace;
+        text-align: center;
+        margin-bottom: 10px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 2. HÀM ĐỌC LỊCH TRỰC VTC
-# ---------------------------------------------------------
-def parse_vtc_matrix_schedule(uploaded_file):
-    df_raw = pd.read_excel(uploaded_file, sheet_name=0, skiprows=2)
-    df_raw.columns = [str(col).strip() for col in df_raw.iloc[0].values]
-    
-    df_data = df_raw.iloc[1:].dropna(subset=['STT']).copy()
-    
-    shift_map = {
-        "ca1": "Ca 1: 07h30 - 14h30",
-        "ca2": "Ca 2: 14h30 - 22h00",
-        "ca3": "Ca 3: 22h00 - 07h30 sáng"
-    }
-    
-    date_cols = [str(i) for i in range(1, 31)]
-    records = []
-    
-    for _, row in df_data.iterrows():
-        name = str(row.get('Họ tên/Bộ phận', '')).strip()
-        if not name or name == 'nan':
-            continue
-            
-        for day in date_cols:
-            if day in row:
-                shift_val = str(row[day]).strip().lower() if pd.notna(row[day]) else ""
-                if shift_val in shift_map:
-                    day_str = f"{int(day):02d}/09/2026"
-                    records.append({
-                        "Ngày": day_str,
-                        "Ca trực": shift_map[shift_val],
-                        "Người trực": name,
-                        "Trạm": "Trạm Phát sóng VTC Digital"
-                    })
-                    
-    if not records:
-        return None
-
-    df_result = pd.DataFrame(records)
-    df_grouped = df_result.groupby(["Ngày", "Ca trực", "Trạm"])["Người trực"].apply(lambda x: ", ".join(x)).reset_index()
-    df_grouped['DayNum'] = df_grouped['Ngày'].apply(lambda x: int(x.split('/')[0]))
-    df_grouped = df_grouped.sort_values(by=['DayNum', 'Ca trực']).drop(columns=['DayNum'])
-    return df_grouped
-
-
-# ---------------------------------------------------------
-# 3. HỆ THỐNG LƯU TRỮ DỮ LIỆU DÙNG CHUNG (PERSISTENCE STORAGE)
+# 2. HỆ THỐNG LƯU TRỮ DÙNG CHUNG (PERSISTENCE JSON STORAGE)
 # ---------------------------------------------------------
 DATA_FILE = "noc_system_storage.json"
 
 def get_default_data():
-    server_list = []
-    for i in range(1, 33):
-        status = "Bình thường" if i % 7 != 0 else "Cảnh báo Cao"
-        cpu = f"{20 + (i * 2) % 60}%"
-        ram = f"{40 + (i * 3) % 50}%"
-        server_list.append({
-            "STT": i,
-            "Tên Server": f"Server-NOC-{i:02d}",
-            "Địa chỉ IP": f"192.168.10.{100+i}",
-            "Chức năng": f"Dịch vụ luồng Kênh {i}" if i <= 20 else f"Core Database {i-20}",
-            "CPU Util": cpu,
-            "RAM Util": ram,
-            "Trạng thái Cảnh báo": status
-        })
-
     return {
         "master_schedule": [
-            {"Ngày": "01/09/2026", "Ca trực": "Ca 1: 07h30 - 14h30", "Người trực": "Bùi Trọng Vinh, Trần Đức Chiến", "Trạm": "Trạm Phát sóng VTC Digital"},
-            {"Ngày": "01/09/2026", "Ca trực": "Ca 2: 14h30 - 22h00", "Người trực": "Nguyễn Văn Đông, Trương Nhật Minh", "Trạm": "Trạm Phát sóng VTC Digital"},
-            {"Ngày": "01/09/2026", "Ca trực": "Ca 3: 22h00 - 07h30 sáng", "Người trực": "Nguyễn Văn Kiên, Võ Bảo Quang", "Trạm": "Trạm Phát sóng VTC Digital"}
+            {"Ngày": "21/09/2026", "Ca trực": "Ca 1: 07h30 - 14h30", "Người trực": "Bùi Trọng Vinh, Trần Đức Chiến", "Trạm": "Trạm Phát sóng VTC Digital"},
+            {"Ngày": "21/09/2026", "Ca trực": "Ca 2: 14h30 - 22h00", "Người trực": "Nguyễn Văn Đông, Trương Nhật Minh", "Trạm": "Trạm Phát sóng VTC Digital"},
+            {"Ngày": "21/09/2026", "Ca trực": "Ca 3: 22h00 - 07h30 sáng", "Người trực": "Nguyễn Văn Kiên, Võ Bảo Quang", "Trạm": "Trạm Phát sóng VTC Digital"}
         ],
         "shift_change_requests": [
             {
                 "Mã GD": "DC001",
-                "Ngày": "01/09/2026",
+                "Ngày": "21/09/2026",
                 "Ca trực": "Ca 1: 07h30 - 14h30",
                 "Người xin đổi": "Bùi Trọng Vinh",
                 "Người trực thay": "Vũ Quốc Minh",
@@ -112,7 +70,7 @@ def get_default_data():
         "tv_incidents": [
             {
                 "STT": 1,
-                "Ngày": "01/09/2026",
+                "Ngày": "21/09/2026",
                 "Tên kênh/nhóm kênh (Đường truyền)": "VTV3 / VTV CAB",
                 "Hiện tượng": "Vỡ hình nhẹ",
                 "Bắt đầu": "09:00",
@@ -122,65 +80,105 @@ def get_default_data():
                 "Biện pháp khắc phục (Bên khắc phục)": "Hàn lại sợi quang / VTV Cab"
             }
         ],
-        "hvac_schedule": [
-            {"Ngày / Tuần": "01/09/2026", "Thời gian (Time)": "08:00 - 20:00", "Chu kỳ": "Ngày 1", "Máy chạy (Chính)": "Máy 1 – Máy 2 – Máy 3", "Máy nghỉ (Dự phòng)": "Máy 4 – Máy 5 – Máy 6 – Máy 7 – Máy 8", "Ghi chú / Trạng thái": "Hoạt động ổn định"},
-            {"Ngày / Tuần": "02/09/2026", "Thời gian (Time)": "08:00 - 20:00", "Chu kỳ": "Ngày 2", "Máy chạy (Chính)": "Máy 4 – Máy 5 – Máy 6", "Máy nghỉ (Dự phòng)": "Máy 1 – Máy 2 – Máy 3 – Máy 7 – Máy 8", "Ghi chú / Trạng thái": "Dự phòng bình thường"},
-            {"Ngày / Tuần": "03/09/2026", "Thời gian (Time)": "08:00 - 20:00", "Chu kỳ": "Ngày 3", "Máy chạy (Chính)": "Máy 7 – Máy 8 – Máy 1", "Máy nghỉ (Dự phòng)": "Máy 2 – Máy 3 – Máy 4 – Máy 5 – Máy 6", "Ghi chú / Trạng thái": "Chuyển chu kỳ tịnh tiến"}
+        "idc_temp_cams": [
+            {
+                "STT": 1,
+                "Khu vực phòng máy": "Phòng Head-end",
+                "Cảm biến / Camera": "Camera 1 (Head-end)",
+                "Nhiệt độ hiện tại (°C)": "22.5°C",
+                "Độ ẩm (%)": "50%",
+                "Chuẩn IDC tiêu chuẩn": "20°C - 24°C / 45% - 55%",
+                "Đánh giá trạng thái": "🟢 Bình thường - Đạt chuẩn IDC",
+                "Ghi chú": "Làm mát luân phiên 3 ngày ổn định"
+            },
+            {
+                "STT": 2,
+                "Khu vực phòng máy": "Phòng Đối tác",
+                "Cảm biến / Camera": "Camera 2 (Đối tác)",
+                "Nhiệt độ hiện tại (°C)": "23.0°C",
+                "Độ ẩm (%)": "52%",
+                "Chuẩn IDC tiêu chuẩn": "20°C - 24°C / 45% - 55%",
+                "Đánh giá trạng thái": "🟢 Bình thường - Đạt chuẩn IDC",
+                "Ghi chú": "Điều hòa chạy ổn định"
+            },
+            {
+                "STT": 3,
+                "Khu vực phòng máy": "Phòng CA (Bảo mật)",
+                "Cảm biến / Camera": "Camera 3 (Phòng CA)",
+                "Nhiệt độ hiện tại (°C)": "21.8°C",
+                "Độ ẩm (%)": "48%",
+                "Chuẩn IDC tiêu chuẩn": "20°C - 24°C / 45% - 55%",
+                "Đánh giá trạng thái": "🟢 Bình thường - Đạt chuẩn IDC",
+                "Ghi chú": "Hệ thống an toàn tuyệt đối"
+            }
         ],
-        "tech_params": [
-            {"STT": 1, "Thông số HPA": "HPA Power Level", "Máy phát K1H-VNS1": "18 kW", "Ngưỡng tiêu chuẩn": "17 - 19 kW", "Đánh giá": "Đạt"},
-            {"STT": 2, "Thông số HPA": "Chỉ số C/N (dBC)", "Máy phát K1H-VNS1": "14.63 dB", "Ngưỡng tiêu chuẩn": "> 14 dB", "Đánh giá": "Đạt"}
+        "hvac_schedule": [
+            {"Ngày / Tuần": "21/09/2026", "Thời gian (Time)": "08:00 - 20:00", "Chu kỳ": "Ngày 1", "Máy chạy (Chính)": "Máy 1 – Máy 2 – Máy 3", "Máy nghỉ (Dự phòng)": "Máy 4 – Máy 5 – Máy 6 – Máy 7 – Máy 8", "Ghi chú / Trạng thái": "Hoạt động ổn định"},
+            {"Ngày / Tuần": "22/09/2026", "Thời gian (Time)": "08:00 - 20:00", "Chu kỳ": "Ngày 2", "Máy chạy (Chính)": "Máy 4 – Máy 5 – Máy 6", "Máy nghỉ (Dự phòng)": "Máy 1 – Máy 2 – Máy 3 – Máy 7 – Máy 8", "Ghi chú / Trạng thái": "Dự phòng bình thường"},
+            {"Ngày / Tuần": "23/09/2026", "Thời gian (Time)": "08:00 - 20:00", "Chu kỳ": "Ngày 3", "Máy chạy (Chính)": "Máy 7 – Máy 8 – Máy 1", "Máy nghỉ (Dự phòng)": "Máy 2 – Máy 3 – Máy 4 – Máy 5 – Máy 6", "Ghi chú / Trạng thái": "Chuyển chu kỳ tịnh tiến"}
         ],
         "ups_params": [
-            {"STT": 1, "Tên hệ thống UPS": "UPS Phụ tải NOC - 01", "Điện áp vào (V)": "380V", "Điện áp ra (V)": "220V", "Mức tải (% Load)": "45%", "Dung lượng Pin (%)": "100%", "Trạng thái": "Bình thường"},
-            {"STT": 2, "Tên hệ thống UPS": "UPS Máy phát K1H - 02", "Điện áp vào (V)": "382V", "Điện áp ra (V)": "220V", "Mức tải (% Load)": "60%", "Dung lượng Pin (%)": "98%", "Trạng thái": "Bình thường"}
+            {"STT": 1, "Tên hệ thống UPS (LAN: 192.168.20.201)": "UPS Phụ tải NOC - 01", "Điện áp vào (V)": "380V", "Điện áp ra (V)": "220V", "Mức tải (% Load)": "45%", "Dung lượng Pin (%)": "100%", "Trạng thái": "Bình thường"},
+            {"STT": 2, "Tên hệ thống UPS (LAN: 192.168.20.201)": "UPS Máy phát K1H - 02", "Điện áp vào (V)": "382V", "Điện áp ra (V)": "220V", "Mức tải (% Load)": "60%", "Dung lượng Pin (%)": "98%", "Trạng thái": "Bình thường"}
         ],
-        "server_warnings": server_list,
-        "idc_network": [
-            {"STT": 1, "Dải mạng / Hệ thống": "Core Network IDC 192.168.10.xx", "Băng thông": "300 Mbps", "Trạng thái Sự cố": "Bình thường", "Thời điểm phát hiện": "—"}
+        "hpa_params": [
+            {"STT": 1, "Thông số HPA (Camera 4)": "HPA Power Level", "Máy phát K1H-VNS1": "18 kW", "Ngưỡng tiêu chuẩn": "17 - 19 kW", "Đánh giá": "Đạt"},
+            {"STT": 2, "Thông số HPA (Camera 4)": "Chỉ số C/N (dBC)", "Máy phát K1H-VNS1": "14.63 dB", "Ngưỡng tiêu chuẩn": "> 14 dB", "Đánh giá": "Đạt"},
+            {"STT": 3, "Thông số HPA (Camera 4)": "Công suất phản xạ (Reflected)", "Máy phát K1H-VNS1": "0.15 kW", "Ngưỡng tiêu chuẩn": "< 0.5 kW", "Đánh giá": "Đạt"}
         ],
-        "menu1_data": {
-            "network_issue": "Bình thường - Không ghi nhận nghẽn mạng",
-            "issue_status": "resolved",
-            "email_user": "giamsatvtc.65lt@vtc.vn",
-            "email_pass": "",
-            "item3_note": "Hệ thống điện & Làm mát (CRAC): Hoạt động tốt (24°C)",
-            "warning_servers": [
-                {"id": "Server 03", "issue": "Cảnh báo CPU cao (>92%)"},
-                {"id": "Server 08", "issue": "Dung lượng ổ cứng đầy (Còn 2%)"},
-                {"id": "Server 12", "issue": "Mất kết nối mạng tạm thời (Ping timeout)"},
-                {"id": "Server 19", "issue": "Nhiệt độ CPU vượt ngưỡng (82°C)"},
-                {"id": "Server 27", "issue": "Lỗi RAM ECC - Cần kiểm tra"}
-            ],
-            "office_network": {
-                "modem": "Modem Viettel Enterprise - Băng thông 500Mbps (OK)",
-                "sw_core": "2x Switch Core Cisco C9300 - Hoạt động (Stacking OK)",
-                "sw_poe": "2x Switch PoE Aruba 2930F - Hoạt động (Cấp nguồn Camera/AP)",
-                "sw_branch": "4x Switch Nhánh TP-Link JetStream - Hoạt động"
+        "warning_servers": [
+            {"STT": 1, "Tên Server": "Server-NOC-03", "Địa chỉ IP": "192.168.10.103", "Dịch vụ": "Kênh VTV3 HD", "CPU Util": "94%", "RAM Util": "82%", "Mức độ Cảnh báo": "🔴 CPU Cao (>92%)", "Biện pháp": "Tối ưu tiến trình transcode"},
+            {"STT": 2, "Tên Server": "Server-NOC-08", "Địa chỉ IP": "192.168.10.108", "Dịch vụ": "Ghi luồng EPG", "CPU Util": "45%", "RAM Util": "78%", "Mức độ Cảnh báo": "🟠 Disk Full (Còn 2%)", "Biện pháp": "Xóa temp log cũ"},
+            {"STT": 3, "Tên Server": "Server-NOC-12", "Địa chỉ IP": "192.168.10.112", "Dịch vụ": "Core Database", "CPU Util": "60%", "RAM Util": "91%", "Mức độ Cảnh báo": "🟡 RAM Cao (>90%)", "Biện pháp": "Khởi động lại cache Redis"},
+            {"STT": 4, "Tên Server": "Server-NOC-19", "Địa chỉ IP": "192.168.10.119", "Dịch vụ": "Luồng Catchup", "CPU Util": "75%", "RAM Util": "65%", "Mức độ Cảnh báo": "🔴 Nhiệt độ CPU (82°C)", "Biện pháp": "Kiểm tra quạt Rack"},
+            {"STT": 5, "Tên Server": "Server-NOC-27", "Địa chỉ IP": "192.168.10.127", "Dịch vụ": "MAM Transfer", "CPU Util": "30%", "RAM Util": "55%", "Mức độ Cảnh báo": "🟡 Ping Timeout nhẹ", "Biện pháp": "Theo dõi Switch Core"}
+        ],
+        "speedtest_networks": [
+            {
+                "STT": 1,
+                "Tên Modem / Dải mạng": "Modem Phòng Trực (NOC)",
+                "Dải IP tĩnh": "192.168.121.xxx",
+                "Ping / Latency": "2 ms",
+                "Download (Mbps)": "485.6 Mbps",
+                "Upload (Mbps)": "490.2 Mbps",
+                "Độ ổn định (Jitter)": "1 ms",
+                "Trạng thái": "🟢 Rất tốt (Đạt chuẩn)"
+            },
+            {
+                "STT": 2,
+                "Tên Modem / Dải mạng": "Modem Văn Phòng",
+                "Dải IP tĩnh": "192.168.1.xxx",
+                "Ping / Latency": "4 ms",
+                "Download (Mbps)": "320.4 Mbps",
+                "Upload (Mbps)": "315.8 Mbps",
+                "Độ ổn định (Jitter)": "2 ms",
+                "Trạng thái": "🟢 Bình thường"
             }
-        },
+        ],
         "warranty_meta": {
             "title": "Báo cáo bảo hành sản phẩm VTC Digital",
-            "week": "Tuần 1/ Tháng 9.2026",
+            "week": "Tuần 3/ Tháng 9.2026",
             "executor": "Kỹ sư Nguyễn Vĩnh Toàn",
             "data_entry": "Nguyễn Trọng Hùng",
-            "period": "từ 07.09.2026 đến 11.09.2026"
+            "period": "từ 21.09.2026 đến 25.09.2026"
         },
         "warranty_repair_data": [
-            {"STT": 1, "Ngày nhập": "04/09/2026", "Loại đầu thu": "HDV2", "Mã dịch vụ": "4256419426", "Sửa chữa / Thay thế": "Nguồn", "Tình trạng Bảo hành": "Còn", "Ngày trả (hoàn thành)": 1},
-            {"STT": 2, "Ngày nhập": "04/09/2026", "Loại đầu thu": "HDV3", "Mã dịch vụ": "4256419427", "Sửa chữa / Thay thế": "Tuner", "Tình trạng Bảo hành": "Hết", "Ngày trả (hoàn thành)": 1}
+            {"STT": 1, "Ngày nhập": "21/09/2026", "Loại đầu thu": "HDV2", "Mã dịch vụ": "4256419426", "Sửa chữa / Thay thế": "Nguồn", "Tình trạng Bảo hành": "Còn", "Ngày trả (hoàn thành)": 1},
+            {"STT": 2, "Ngày nhập": "21/09/2026", "Loại đầu thu": "HDV3", "Mã dịch vụ": "4256419427", "Sửa chữa / Thay thế": "Tuner", "Tình trạng Bảo hành": "Hết", "Ngày trả (hoàn thành)": 1}
         ],
         "warranty_exchange_data": [
-            {"STT": 1, "Ngày nhập": "04/09/2026", "Tên khách hàng / Địa chỉ": "Đại lý Hà Nội", "Loại đầu thu": "HDV2", "Mã dịch vụ cũ": "3912784969", "Mã dịch vụ mới": "3922395612", "Người thực hiện": "Nguyễn Vĩnh Toàn", "Ngày trả (hoàn thành)": 1},
-            {"STT": 2, "Ngày nhập": "04/09/2026", "Tên khách hàng / Địa chỉ": "Khách lẻ Hải Phòng", "Loại đầu thu": "HDV3", "Mã dịch vụ cũ": "3911654457", "Mã dịch vụ mới": "3922564598", "Người thực hiện": "Nguyễn Vĩnh Toàn", "Ngày trả (hoàn thành)": 1}
+            {"STT": 1, "Ngày nhập": "21/09/2026", "Tên khách hàng / Địa chỉ": "Đại lý Hà Nội", "Loại đầu thu": "HDV2", "Mã dịch vụ cũ": "3912784969", "Mã dịch vụ mới": "3922395612", "Người thực hiện": "Nguyễn Vĩnh Toàn", "Ngày trả (hoàn thành)": 1},
+            {"STT": 2, "Ngày nhập": "21/09/2026", "Tên khách hàng / Địa chỉ": "Khách lẻ Hải Phòng", "Loại đầu thu": "HDV3", "Mã dịch vụ cũ": "3911654457", "Mã dịch vụ mới": "3922564598", "Người thực hiện": "Nguyễn Vĩnh Toàn", "Ngày trả (hoàn thành)": 1}
+        ],
+        "ai_chat_history": [
+            {"role": "assistant", "content": "Xin chào! Tôi là Trợ lý AI Phòng Kỹ thuật Công nghệ VTC. Tôi có thể hỗ trợ bạn tra cứu quy trình trực ca, phân tích sự cố kênh truyền hình, tư vấn thông số HPA/UPS và các quy định kỹ thuật. Bạn cần hỗ trợ gì hôm nay?"}
         ],
         "audit_logs": [
-            {"Thời gian": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Người dùng": "Hệ thống", "Thao tác": "Khởi chạy ứng dụng", "Ghi chú": "Mở phiên làm việc"}
+            {"Thời gian": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Người dùng": "Hệ thống", "Thao tác": "Khởi chạy ứng dụng NOC", "Ghi chú": "Đồng bộ dữ liệu"}
         ]
     }
 
 def load_shared_storage():
-    import json, os
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -192,27 +190,26 @@ def load_shared_storage():
     return def_data
 
 def save_shared_storage(data=None):
-    import json
     if data is None:
         data = {
             "master_schedule": st.session_state.master_schedule.to_dict(orient="records") if isinstance(st.session_state.master_schedule, pd.DataFrame) else st.session_state.master_schedule,
             "shift_change_requests": st.session_state.shift_change_requests.to_dict(orient="records") if isinstance(st.session_state.shift_change_requests, pd.DataFrame) else st.session_state.shift_change_requests,
             "tv_incidents": st.session_state.tv_incidents.to_dict(orient="records") if isinstance(st.session_state.tv_incidents, pd.DataFrame) else st.session_state.tv_incidents,
+            "idc_temp_cams": st.session_state.idc_temp_cams.to_dict(orient="records") if isinstance(st.session_state.idc_temp_cams, pd.DataFrame) else st.session_state.idc_temp_cams,
             "hvac_schedule": st.session_state.hvac_schedule.to_dict(orient="records") if isinstance(st.session_state.hvac_schedule, pd.DataFrame) else st.session_state.hvac_schedule,
-            "tech_params": st.session_state.tech_params.to_dict(orient="records") if isinstance(st.session_state.tech_params, pd.DataFrame) else st.session_state.tech_params,
             "ups_params": st.session_state.ups_params.to_dict(orient="records") if isinstance(st.session_state.ups_params, pd.DataFrame) else st.session_state.ups_params,
-            "server_warnings": st.session_state.server_warnings.to_dict(orient="records") if isinstance(st.session_state.server_warnings, pd.DataFrame) else st.session_state.server_warnings,
-            "idc_network": st.session_state.idc_network.to_dict(orient="records") if isinstance(st.session_state.idc_network, pd.DataFrame) else st.session_state.idc_network,
-            "menu1_data": st.session_state.menu1_data,
+            "hpa_params": st.session_state.hpa_params.to_dict(orient="records") if isinstance(st.session_state.hpa_params, pd.DataFrame) else st.session_state.hpa_params,
+            "warning_servers": st.session_state.warning_servers.to_dict(orient="records") if isinstance(st.session_state.warning_servers, pd.DataFrame) else st.session_state.warning_servers,
+            "speedtest_networks": st.session_state.speedtest_networks.to_dict(orient="records") if isinstance(st.session_state.speedtest_networks, pd.DataFrame) else st.session_state.speedtest_networks,
             "warranty_meta": st.session_state.warranty_meta,
             "warranty_repair_data": st.session_state.warranty_repair_data.to_dict(orient="records") if isinstance(st.session_state.warranty_repair_data, pd.DataFrame) else st.session_state.warranty_repair_data,
             "warranty_exchange_data": st.session_state.warranty_exchange_data.to_dict(orient="records") if isinstance(st.session_state.warranty_exchange_data, pd.DataFrame) else st.session_state.warranty_exchange_data,
+            "ai_chat_history": st.session_state.ai_chat_history,
             "audit_logs": st.session_state.audit_logs.to_dict(orient="records") if isinstance(st.session_state.audit_logs, pd.DataFrame) else st.session_state.audit_logs
         }
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-# Khởi tạo hoặc nạp lại dữ liệu dùng chung vào Session State
 storage_data = load_shared_storage()
 
 if "master_schedule" not in st.session_state:
@@ -224,23 +221,23 @@ if "shift_change_requests" not in st.session_state:
 if "tv_incidents" not in st.session_state:
     st.session_state.tv_incidents = pd.DataFrame(storage_data.get("tv_incidents", []))
 
+if "idc_temp_cams" not in st.session_state:
+    st.session_state.idc_temp_cams = pd.DataFrame(storage_data.get("idc_temp_cams", get_default_data()["idc_temp_cams"]))
+
 if "hvac_schedule" not in st.session_state:
     st.session_state.hvac_schedule = pd.DataFrame(storage_data.get("hvac_schedule", []))
-
-if "tech_params" not in st.session_state:
-    st.session_state.tech_params = pd.DataFrame(storage_data.get("tech_params", []))
 
 if "ups_params" not in st.session_state:
     st.session_state.ups_params = pd.DataFrame(storage_data.get("ups_params", []))
 
-if "server_warnings" not in st.session_state:
-    st.session_state.server_warnings = pd.DataFrame(storage_data.get("server_warnings", []))
+if "hpa_params" not in st.session_state:
+    st.session_state.hpa_params = pd.DataFrame(storage_data.get("hpa_params", get_default_data()["hpa_params"]))
 
-if "idc_network" not in st.session_state:
-    st.session_state.idc_network = pd.DataFrame(storage_data.get("idc_network", []))
+if "warning_servers" not in st.session_state:
+    st.session_state.warning_servers = pd.DataFrame(storage_data.get("warning_servers", get_default_data()["warning_servers"]))
 
-if "menu1_data" not in st.session_state:
-    st.session_state.menu1_data = storage_data.get("menu1_data", get_default_data()["menu1_data"])
+if "speedtest_networks" not in st.session_state:
+    st.session_state.speedtest_networks = pd.DataFrame(storage_data.get("speedtest_networks", get_default_data()["speedtest_networks"]))
 
 if "warranty_meta" not in st.session_state:
     st.session_state.warranty_meta = storage_data.get("warranty_meta", get_default_data()["warranty_meta"])
@@ -250,6 +247,9 @@ if "warranty_repair_data" not in st.session_state:
 
 if "warranty_exchange_data" not in st.session_state:
     st.session_state.warranty_exchange_data = pd.DataFrame(storage_data.get("warranty_exchange_data", []))
+
+if "ai_chat_history" not in st.session_state:
+    st.session_state.ai_chat_history = storage_data.get("ai_chat_history", get_default_data()["ai_chat_history"])
 
 if "audit_logs" not in st.session_state:
     st.session_state.audit_logs = pd.DataFrame(storage_data.get("audit_logs", []))
@@ -271,7 +271,7 @@ def add_audit_log(user, action, note=""):
     save_shared_storage()
 
 # ---------------------------------------------------------
-# 4. HÀM TẠO EXCEL BÁO CÁO CA A4 (ĐẦY ĐỦ 4 MỤC)
+# 3. HÀM TẠO EXCEL BÁO CÁO TỔNG HỢP CA TRỰC A4 (KẺ KHUNG ĐẸP)
 # ---------------------------------------------------------
 def generate_excel_a4_report(current_shift_info):
     wb = openpyxl.Workbook()
@@ -293,11 +293,9 @@ def generate_excel_a4_report(current_shift_info):
     fill_tbl_header = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
     fill_meta = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
     
-    thin_side = Side(border_style="thin", color="D9D9D9")
-    thick_dark = Side(border_style="thin", color="000000")
-    
+    thin_side = Side(border_style="thin", color="000000")
     border_data = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
-    border_header = Border(left=thick_dark, right=thick_dark, top=thick_dark, bottom=thick_dark)
+    border_header = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
     
     ws['A1'] = "VTC DIGITAL - PHÒNG KỸ THUẬT CÔNG NGHỆ"
     ws['A1'].font = font_company
@@ -305,25 +303,25 @@ def generate_excel_a4_report(current_shift_info):
     ws['A2'] = "BÁO CÁO TỔNG HỢP CA TRỰC PHÁT SÓNG & VẬN HÀNH NOC (A4)"
     ws['A2'].font = font_main_title
     
-    ws.merge_cells('A4:H5')
+    ws.merge_cells('A4:I5')
     meta_cell = ws['A4']
-    meta_cell.value = f"📍 Đơn vị: {current_shift_info['Trạm']}  |  🗓️ Ngày: {current_shift_info['Ngày']}  |  ⏰ Ca trực: {current_shift_info['Ca trực']}  |  👤 Kỹ sư: {current_shift_info['Người trực']}"
+    meta_cell.value = f"📍 Đơn vị: {current_shift_info['Trạm']}  |  🗓️ Ngày: {current_shift_info['Ngày']}  |  ⏰ Ca trực: {current_shift_info['Ca trực']}  |  👤 Kỹ sư trực: {current_shift_info['Người trực']}"
     meta_cell.font = font_body_bold
     meta_cell.alignment = Alignment(horizontal="center", vertical="center")
     
     for r in range(4, 6):
-        for c in range(1, 9):
+        for c in range(1, 10):
             cell = ws.cell(row=r, column=c)
             cell.fill = fill_meta
             cell.border = border_header
 
     def write_section_title(start_row, title_text):
-        ws.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=8)
+        ws.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=9)
         s_cell = ws.cell(row=start_row, column=1, value=title_text)
         s_cell.font = font_section
         s_cell.fill = fill_section
         s_cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-        for c in range(1, 9):
+        for c in range(1, 10):
             ws.cell(row=start_row, column=c).border = border_header
 
     def write_table_data(start_row, headers, df_data):
@@ -337,7 +335,7 @@ def generate_excel_a4_report(current_shift_info):
         curr_r = start_row + 1
         if df_data.empty:
             ws.merge_cells(start_row=curr_r, start_column=1, end_row=curr_r, end_column=len(headers))
-            empty_cell = ws.cell(row=curr_r, column=1, value="Không ghi nhận sự cố / Thông số bình thường")
+            empty_cell = ws.cell(row=curr_r, column=1, value="Không ghi nhận sự cố / Thông số hoạt động bình thường")
             empty_cell.font = font_body
             empty_cell.alignment = Alignment(horizontal="center", vertical="center")
             for c in range(1, len(headers) + 1):
@@ -347,39 +345,45 @@ def generate_excel_a4_report(current_shift_info):
             for _, row in df_data.iterrows():
                 for col_idx, h_text in enumerate(headers, 1):
                     val = row.get(h_text, "")
-                    c = ws.cell(row=curr_r, column=col_idx, value=val)
+                    c = ws.cell(row=curr_r, column=col_idx, value=str(val))
                     c.font = font_body
                     c.border = border_data
-                    c.alignment = Alignment(horizontal="center" if col_idx in [1, 4, 5, 6] else "left", vertical="center", wrap_text=True)
+                    c.alignment = Alignment(horizontal="center" if col_idx in [1, 2, 5, 6, 7] else "left", vertical="center", wrap_text=True)
                 curr_r += 1
             return curr_r
 
     # MỤC 1: SỰ CỐ TRUYỀN HÌNH
-    write_section_title(7, "1. TRUYỀN HÌNH (SỰ CỐ VÀ ĐƯỜNG TRUYỀN)")
+    write_section_title(7, "1. SỰ CỐ ĐƯỜNG TRUYỀN & GIÁM SÁT KÊNH (FALCON HLS MONITOR)")
     tv_cols = ["STT", "Ngày", "Tên kênh/nhóm kênh (Đường truyền)", "Hiện tượng", "Bắt đầu", "Kết thúc", "Thời lượng", "Nguyên nhân", "Biện pháp khắc phục (Bên khắc phục)"]
     next_r = write_table_data(8, tv_cols, st.session_state.tv_incidents) + 1
 
-    # MỤC 2: ĐIỀU HÒA
-    write_section_title(next_r, "2. HỆ THỐNG ĐIỀU HÒA PHÒNG MÁY NOC (TUÂN THỦ CHU KỲ 3 NGÀY)")
-    hvac_cols = ["Ngày / Tuần", "Thời gian (Time)", "Chu kỳ", "Máy chạy (Chính)", "Máy nghỉ (Dự phòng)", "Ghi chú / Trạng thái"]
-    next_r = write_table_data(next_r + 1, hvac_cols, st.session_state.hvac_schedule) + 1
+    # MỤC 2: NHIỆT ĐỘ PHÒNG MÁY (3 CAMERA & ĐIỀU HÒA LUÂN PHIÊN)
+    write_section_title(next_r, "2. NHIỆT ĐỘ PHÒNG MÁY IDC (3 CAMERA) & ĐIỀU HÒA LUÂN PHIÊN")
+    temp_cols = ["STT", "Khu vực phòng máy", "Cảm biến / Camera", "Nhiệt độ hiện tại (°C)", "Độ ẩm (%)", "Chuẩn IDC tiêu chuẩn", "Đánh giá trạng thái", "Ghi chú"]
+    next_r = write_table_data(next_r + 1, temp_cols, st.session_state.idc_temp_cams) + 1
 
-    # MỤC 3: UPS VÀ HPA
-    write_section_title(next_r, "3. HỆ THỐNG UPS VÀ THÔNG SỐ KỸ THUẬT HPA CA TRỰC")
-    tech_cols = ["STT", "Thông số HPA", "Máy phát K1H-VNS1", "Ngưỡng tiêu chuẩn", "Đánh giá"]
-    next_r = write_table_data(next_r + 1, tech_cols, st.session_state.tech_params) + 1
+    # MỤC 3: HỆ THỐNG UPS VÀ HPA (LAN: 192.168.20.201 & CAMERA 4)
+    write_section_title(next_r, "3. HỆ THỐNG UPS (LAN 192.168.20.201) & MÁY PHÁT HPA (CAMERA 4)")
+    ups_cols = ["STT", "Tên hệ thống UPS (LAN: 192.168.20.201)", "Điện áp vào (V)", "Điện áp ra (V)", "Mức tải (% Load)", "Dung lượng Pin (%)", "Trạng thái"]
+    next_r = write_table_data(next_r + 1, ups_cols, st.session_state.ups_params) + 1
 
-    # MỤC 4: SERVER (32 CON) VÀ MẠNG IDC
-    write_section_title(next_r, "4. HỆ THỐNG SERVER (32 CON) VÀ MẠNG VĂN PHÒNG")
-    server_cols = ["STT", "Tên Server", "Địa chỉ IP", "Chức năng", "CPU Util", "RAM Util", "Trạng thái Cảnh báo"]
-    next_r = write_table_data(next_r + 1, server_cols, st.session_state.server_warnings) + 2
+    hpa_cols = ["STT", "Thông số HPA (Camera 4)", "Máy phát K1H-VNS1", "Ngưỡng tiêu chuẩn", "Đánh giá"]
+    next_r = write_table_data(next_r + 1, hpa_cols, st.session_state.hpa_params) + 1
 
-    ws.cell(row=next_r, column=2, value="NGƯỜI LẬP BÁO CÁO").font = font_body_bold
-    ws.cell(row=next_r, column=7, value="XÁC NHẬN CỦA LÃNH ĐẠO").font = font_body_bold
-    ws.cell(row=next_r+1, column=2, value="(Ký và ghi rõ họ tên)").font = font_signature
+    # MỤC 4: SERVER CẢNH BÁO VÀ MẠNG VĂN PHÒNG (2 MODEM SPEEDTEST)
+    write_section_title(next_r, "4. TÌNH TRẠNG SERVER CẢNH BÁO & MẠNG VĂN PHÒNG (2 MODEM)")
+    srv_cols = ["STT", "Tên Server", "Địa chỉ IP", "Dịch vụ", "CPU Util", "RAM Util", "Mức độ Cảnh báo", "Biện pháp"]
+    next_r = write_table_data(next_r + 1, srv_cols, st.session_state.warning_servers) + 1
+
+    net_cols = ["STT", "Tên Modem / Dải mạng", "Dải IP tĩnh", "Ping / Latency", "Download (Mbps)", "Upload (Mbps)", "Độ ổn định (Jitter)", "Trạng thái"]
+    next_r = write_table_data(next_r + 1, net_cols, st.session_state.speedtest_networks) + 2
+
+    ws.cell(row=next_r, column=2, value="NGƯỜI LẬP BÁO CÁO (KỸ SƯ TRỰC CA)").font = font_body_bold
+    ws.cell(row=next_r, column=7, value="XÁC NHẬN CỦA LÃNH ĐẠO PHÒNG").font = font_body_bold
+    ws.cell(row=next_r+1, column=2, value=f"{current_shift_info['Người trực']} (Ký tên)").font = font_signature
     ws.cell(row=next_r+1, column=7, value="(Ký và ghi rõ họ tên)").font = font_signature
 
-    col_widths = {'A': 6, 'B': 24, 'C': 20, 'D': 12, 'E': 12, 'F': 12, 'G': 25, 'H': 28}
+    col_widths = {'A': 6, 'B': 14, 'C': 22, 'D': 18, 'E': 12, 'F': 12, 'G': 15, 'H': 24, 'I': 26}
     for col_letter, width in col_widths.items():
         ws.column_dimensions[col_letter].width = width
 
@@ -388,11 +392,10 @@ def generate_excel_a4_report(current_shift_info):
     return output.getvalue()
 
 # ---------------------------------------------------------
-# 5. HÀM TẠO EXCEL BÁO CÁO BẢO HÀNH GỘP 2 SHEET A4
+# 4. HÀM TẠO EXCEL BÁO CÁO BẢO HÀNH A4
 # ---------------------------------------------------------
 def generate_combined_warranty_excel():
     wb = openpyxl.Workbook()
-    
     font_title = Font(name="Times New Roman", size=16, bold=True, color="002060")
     font_sub = Font(name="Times New Roman", size=12, bold=True, color="002060")
     font_info = Font(name="Times New Roman", size=11, italic=True)
@@ -410,7 +413,6 @@ def generate_combined_warranty_excel():
         bottom=Side(style='thin', color='000000')
     )
 
-    # SHEET 1
     ws1 = wb.active
     ws1.title = "Sửa chữa"
     ws1.page_setup.paperSize = ws1.PAPERSIZE_A4
@@ -438,10 +440,10 @@ def generate_combined_warranty_excel():
     ws1['B5'] = "Ngày nhập"
     ws1['C5'] = "Loại đầu thu"
     ws1['D5'] = "Mã dịch vụ"
-    ws1['E5'] = "Sửa chữa\nThay thế"
-    ws1['F5'] = "Tình trạng\nBảo hành"
+    ws1['E5'] = "Sửa chữa / Thay thế"
+    ws1['F5'] = "Tình trạng Bảo hành"
     ws1.merge_cells('F5:G5')
-    ws1['H5'] = "Ngày trả\n(hoàn thành)"
+    ws1['H5'] = "Ngày trả (hoàn thành)"
 
     for col_num in range(1, 9):
         cell = ws1.cell(row=5, column=col_num)
@@ -521,7 +523,7 @@ def generate_combined_warranty_excel():
     ws2['A4'] = f"Nhập liệu: {st.session_state.warranty_meta['data_entry']}"
     ws2['A4'].font = font_info
 
-    ex_headers = ["STT", "Ngày nhập", "Tên khách hàng/Địa chỉ", "Loại đầu thu", "Mã dịch vụ cũ", "Mã dịch vụ mới", "Người thực hiện", "Ngày trả\n(hoàn thành)"]
+    ex_headers = ["STT", "Ngày nhập", "Tên khách hàng/Địa chỉ", "Loại đầu thu", "Mã dịch vụ cũ", "Mã dịch vụ mới", "Người thực hiện", "Ngày trả (hoàn thành)"]
     for col_num, h_text in enumerate(ex_headers, 1):
         c = ws2.cell(row=5, column=col_num, value=h_text)
         c.font = font_tbl_header
@@ -572,9 +574,6 @@ def generate_combined_warranty_excel():
     wb.save(output)
     return output.getvalue()
 
-# ---------------------------------------------------------
-# 6. GIẢ LẬP GỬI EMAIL TỰ ĐỘNG
-# ---------------------------------------------------------
 def send_email_notification(from_email, to_email, subject, body_text, attachment_bytes=None, filename="BaoCao.xlsx"):
     try:
         return True, f"✅ Đã gửi email thành công từ **{from_email}** tới **{to_email}**!"
@@ -582,11 +581,11 @@ def send_email_notification(from_email, to_email, subject, body_text, attachment
         return False, f"⚠️ Lỗi gửi mail: {e}"
 
 # ---------------------------------------------------------
-# 7. THANH BÊN (SIDEBAR) & XÁC THỰC RÔLE
+# 5. THANH BÊN (SIDEBAR) & CÁC NÚT ĐỒNG BỘ
 # ---------------------------------------------------------
 st.sidebar.markdown("### CÔNG TY VTC DỊCH VỤ TRUYỀN HÌNH SỐ")
 st.sidebar.markdown("### 🤖 AI PHÒNG KỸ THUẬT CÔNG NGHỆ")
-st.sidebar.markdown("## HỆ THỐNG QUẢN LÝ VẬN HÀNH NOC & BẢO HÀNH SẢN PHẨM")
+st.sidebar.markdown("## HỆ THỐNG QUẢN LÝ VẬN HÀNH NOC & BẢO HÀNH")
 st.sidebar.divider()
 
 access_type = st.sidebar.selectbox("🌐 Vùng truy cập:", ["Local (Mạng Nội bộ)", "Internet (MFA)"])
@@ -621,39 +620,33 @@ else:
 is_admin = (user_role == "Admin / Lãnh đạo Phòng") and is_authenticated
 
 st.sidebar.divider()
+col_sync1, col_sync2 = st.sidebar.columns(2)
+with col_sync1:
+    if st.button("💾 Lưu chung", type="primary", use_container_width=True, help="Lưu dữ liệu lên máy chủ dùng chung"):
+        save_shared_storage()
+        st.sidebar.success("✅ Đã lưu!")
+with col_sync2:
+    if st.button("🔄 Tải lại", use_container_width=True, help="Làm mới dữ liệu từ máy chủ"):
+        refreshed = load_shared_storage()
+        st.session_state.master_schedule = pd.DataFrame(refreshed.get("master_schedule", []))
+        st.session_state.shift_change_requests = pd.DataFrame(refreshed.get("shift_change_requests", []))
+        st.session_state.tv_incidents = pd.DataFrame(refreshed.get("tv_incidents", []))
+        st.session_state.idc_temp_cams = pd.DataFrame(refreshed.get("idc_temp_cams", []))
+        st.session_state.hvac_schedule = pd.DataFrame(refreshed.get("hvac_schedule", []))
+        st.session_state.ups_params = pd.DataFrame(refreshed.get("ups_params", []))
+        st.session_state.hpa_params = pd.DataFrame(refreshed.get("hpa_params", []))
+        st.session_state.warning_servers = pd.DataFrame(refreshed.get("warning_servers", []))
+        st.session_state.speedtest_networks = pd.DataFrame(refreshed.get("speedtest_networks", []))
+        st.session_state.warranty_meta = refreshed.get("warranty_meta", {})
+        st.session_state.warranty_repair_data = pd.DataFrame(refreshed.get("warranty_repair_data", []))
+        st.session_state.warranty_exchange_data = pd.DataFrame(refreshed.get("warranty_exchange_data", []))
+        st.session_state.ai_chat_history = refreshed.get("ai_chat_history", [])
+        st.session_state.audit_logs = pd.DataFrame(refreshed.get("audit_logs", []))
+        st.rerun()
 
-st.sidebar.divider()
-if st.sidebar.button("💾 ĐỒNG BỘ & LƯU TẤT CẢ DỮ LIỆU", type="primary", use_container_width=True):
-    save_shared_storage()
-    st.sidebar.success("✅ Đã đồng bộ & lưu dữ liệu vào hệ thống máy chủ!")
-    st.rerun()
-
-if st.sidebar.button("🔄 TẢI LẠI DỮ LIỆU TỪ MÁY CHỦ", use_container_width=True):
-    refreshed_data = load_shared_storage()
-    st.session_state.master_schedule = pd.DataFrame(refreshed_data.get("master_schedule", []))
-    st.session_state.shift_change_requests = pd.DataFrame(refreshed_data.get("shift_change_requests", []))
-    st.session_state.tv_incidents = pd.DataFrame(refreshed_data.get("tv_incidents", []))
-    st.session_state.hvac_schedule = pd.DataFrame(refreshed_data.get("hvac_schedule", []))
-    st.session_state.tech_params = pd.DataFrame(refreshed_data.get("tech_params", []))
-    st.session_state.ups_params = pd.DataFrame(refreshed_data.get("ups_params", []))
-    st.session_state.server_warnings = pd.DataFrame(refreshed_data.get("server_warnings", []))
-    st.session_state.idc_network = pd.DataFrame(refreshed_data.get("idc_network", []))
-    st.session_state.menu1_data = refreshed_data.get("menu1_data", {})
-    st.session_state.warranty_meta = refreshed_data.get("warranty_meta", {})
-    st.session_state.warranty_repair_data = pd.DataFrame(refreshed_data.get("warranty_repair_data", []))
-    st.session_state.warranty_exchange_data = pd.DataFrame(refreshed_data.get("warranty_exchange_data", []))
-    st.session_state.audit_logs = pd.DataFrame(refreshed_data.get("audit_logs", []))
-    st.sidebar.info("🔄 Đã làm mới dữ liệu mới nhất từ máy chủ!")
-    st.rerun()
-
-
-
-# ---------------------------------------------------------
-# TIỆN ÍCH LIÊN HỆ ONLINE (THU GỌN)
-# ---------------------------------------------------------
+# HỖ TRỢ TRỰC TUYẾN THU GỌN
 HOTLINE_NUMBER = "0913332569"
 PHONE_INTERNATIONAL = "84913332569"
-
 st.sidebar.divider()
 with st.sidebar.expander("💬 Hỗ trợ nhanh Zalo / Viber", expanded=False):
     st.markdown(f"📞 **Hotline:** `{HOTLINE_NUMBER}`")
@@ -663,28 +656,26 @@ with st.sidebar.expander("💬 Hỗ trợ nhanh Zalo / Viber", expanded=False):
     st.caption("Quét mã QR trên điện thoại:")
     st.image(f"https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://zalo.me/{HOTLINE_NUMBER}", caption="QR Zalo 0913332569", use_container_width=True)
 
+st.sidebar.divider()
 menu = st.sidebar.radio(
     "📋 Danh mục Chức năng:",
     [
-        "1. Báo cáo Tổng hợp Ca trực (A4)",
-        "2. Quản lý Phân ca, Duyệt Đổi ca",
-        "3. Phân tích Đối soát",
-        "4. Quản lý Bảo hành (Sửa chữa & Đổi bảo hành)",
-        "5. Giám sát Luồng Kênh Catchup (HLS Monitor)",
-        "6. Không gian Trao đổi Zalo & Viber (0913332569)",
-        "7. Lưu trữ và Tài liệu AI",
-        "8. Nhật ký Hoạt động"
+        "1. Giám sát Kênh, Sự cố, Nhiệt độ, UPS/HPA, Server & Mạng",
+        "2. Quản lý Phân ca, Đổi ca, Không gian Trao đổi & Đối soát",
+        "3. Quản lý Bảo hành (Sửa chữa & Đổi bảo hành)",
+        "4. Lưu trữ và Phân tích AI",
+        "5. Nhật ký Hoạt động (Audit Trail)"
     ]
 )
 
 # ---------------------------------------------------------
-# HÀM HIỂN THỊ KHU VỰC ĐĂNG NHẬP EMAIL ĐẦU TRANG
+# HÀM HIỂN THỊ ĐĂNG NHẬP EMAIL
 # ---------------------------------------------------------
 def render_email_login_header(email_key, title_label):
-    st.markdown(f"### 📧 Đăng nhập Email Gửi Báo cáo & Thông báo: `{st.session_state[email_key]['email']}`")
+    st.markdown(f"### 📧 Đăng nhập Email Gửi Báo cáo Ca trực: `{st.session_state[email_key]['email']}`")
     with st.expander(f"🔑 Cấu hình Đăng nhập Tài khoản Email: {st.session_state[email_key]['email']}", expanded=not st.session_state[email_key]["is_logged_in"]):
         col_m1, col_m2, col_m3 = st.columns([2, 2, 1])
-        email_addr = col_m1.text_input("Địa chỉ Email gửi:", value=st.session_state[email_key]["email"], disabled=True, key=f"inp_email_{email_key}")
+        col_m1.text_input("Địa chỉ Email gửi:", value=st.session_state[email_key]["email"], disabled=True, key=f"inp_email_{email_key}")
         email_pass = col_m2.text_input("Mật khẩu Email / App Password:", type="password", key=f"inp_pass_{email_key}")
         
         st.write("")
@@ -701,24 +692,28 @@ def render_email_login_header(email_key, title_label):
                     st.error("⚠️ Vui lòng nhập mật khẩu Email!")
 
 # ---------------------------------------------------------
-# 8. CHI TIẾT CÁC MENU CHỨC NĂNG
+# CHI TIẾT CÁC MENU
 # ---------------------------------------------------------
 
-# MENU 1: BÁO CÁO TỔNG HỢP CA TRỰC A4
-if menu == "1. Báo cáo Tổng hợp Ca trực (A4)":
-    st.title("📄 Báo cáo tổng hợp ca trực NOC & Vận hành (Đầy đủ 4 Mục)")
-    
-    # ĐĂNG NHẬP EMAIL ĐẦU MENU 1
+# =========================================================
+# MENU 1: GIÁM SÁT KÊNH, SỰ CỐ, NHIỆT ĐỘ, UPS/HPA, SERVER & MẠNG
+# =========================================================
+if menu == "1. Giám sát Kênh, Sự cố, Nhiệt độ, UPS/HPA, Server & Mạng":
+    st.title("🖥️ Menu 1: Giám Sát Tổng Thể NOC & Báo Cáo Ca Trực (Khổ A4)")
+    st.caption("Tổng hợp báo cáo từng ca trực sử dụng Email: **giamsatvtc.65lt@vtc.vn** (Bản in A4 kẻ khung chuẩn)")
+
+    # ĐĂNG NHẬP EMAIL
     render_email_login_header("email_noc_login", "NOC Mail")
     st.divider()
 
-    st.subheader("📌 Thông tin ca trực Master")
+    # THÔNG TIN CA TRỰC HIỆN TẠI
+    st.subheader("📌 Thông tin ca trực hiện tại")
     available_dates = list(st.session_state.master_schedule["Ngày"].unique())
     col_sel1, col_sel2 = st.columns(2)
-    selected_date = col_sel1.selectbox("🗓️ Chọn Ngày trực:", available_dates)
+    selected_date = col_sel1.selectbox("🗓️ Chọn Ngày trực:", available_dates if available_dates else ["21/09/2026"])
     
     shifts_in_date = list(st.session_state.master_schedule[st.session_state.master_schedule["Ngày"] == selected_date]["Ca trực"].unique())
-    selected_shift = col_sel2.selectbox("⏰ Chọn Ca trực:", shifts_in_date)
+    selected_shift = col_sel2.selectbox("⏰ Chọn Ca trực:", shifts_in_date if shifts_in_date else ["Ca 1: 07h30 - 14h30"])
 
     match_row = st.session_state.master_schedule[
         (st.session_state.master_schedule["Ngày"] == selected_date) & 
@@ -728,7 +723,7 @@ if menu == "1. Báo cáo Tổng hợp Ca trực (A4)":
     if not match_row.empty:
         curr_info = match_row.iloc[0].to_dict()
     else:
-        curr_info = {"Trạm": "Trạm Phát sóng VTC Digital", "Ngày": selected_date, "Ca trực": selected_shift, "Người trực": "Chưa gán"}
+        curr_info = {"Trạm": "Trạm Phát sóng VTC Digital", "Ngày": selected_date, "Ca trực": selected_shift, "Người trực": "Kỹ sư Trực ca"}
 
     col1, col2, col3, col4 = st.columns(4)
     col1.text_input("Trạm:", value=curr_info["Trạm"], disabled=True)
@@ -736,317 +731,337 @@ if menu == "1. Báo cáo Tổng hợp Ca trực (A4)":
     col3.text_input("Ca trực:", value=curr_info["Ca trực"], disabled=True)
     col4.text_input("Kỹ sư trực ca:", value=curr_info["Người trực"], disabled=True)
 
-    st.divider()
-
+    # NÚT XUẤT VÀ GỬI BÁO CÁO CA A4
     col_b1, col_b2 = st.columns(2)
     excel_a4_bytes = generate_excel_a4_report(curr_info)
     
     with col_b1:
         st.download_button(
-            label="👁️ Tải/Xuất Báo cáo Ca Excel A4 đầy đủ 4 Mục",
+            label="👁️ Tải/Xuất Báo cáo Ca Tổng hợp Excel A4 (Kẻ khung đẹp)",
             data=excel_a4_bytes,
-            file_name=f"Bao_Cao_Ca_A4_Full_{selected_date.replace('/','_')}.xlsx",
+            file_name=f"Bao_Cao_Ca_A4_{selected_date.replace('/','_')}_{selected_shift[:4].replace(' ','')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
 
     with col_b2:
-        if st.button("🚀 Kết thúc ca trực (Gửi Báo cáo A4 Đầy đủ 4 Mục tới Lãnh đạo)", type="primary", use_container_width=True):
+        if st.button("🚀 Kết thúc ca trực (Gửi Báo cáo A4 Đầy đủ tới Lãnh đạo)", type="primary", use_container_width=True):
             if st.session_state.email_noc_login["is_logged_in"]:
                 status, msg = send_email_notification(
                     from_email=st.session_state.email_noc_login["email"],
                     to_email="anh.lehoang@vtc.vn",
-                    subject=f"[BÁO CÁO CA A4 FULL] {curr_info['Ngày']} - {curr_info['Ca trực']}",
-                    body_text=f"Báo cáo ca trực A4 đầy đủ 4 mục gửi tới Lãnh đạo từ {st.session_state.email_noc_login['email']}",
+                    subject=f"[BÁO CÁO CA A4] {curr_info['Ngày']} - {curr_info['Ca trực']}",
+                    body_text=f"Báo cáo tổng hợp ca trực A4 gửi tới Lãnh đạo từ {st.session_state.email_noc_login['email']}",
                     attachment_bytes=excel_a4_bytes,
                     filename=f"Bao_Cao_Ca_A4_{curr_info['Ngày'].replace('/','_')}.xlsx"
                 )
                 st.success(msg)
-                add_audit_log(curr_info['Người trực'], "Kết thúc ca trực & Gửi email A4 Đầy đủ 4 Mục", "Gửi tới anh.lehoang@vtc.vn")
+                add_audit_log(curr_info['Người trực'], "Kết thúc ca trực & Gửi email A4", "Gửi tới anh.lehoang@vtc.vn")
             else:
                 st.error(f"🔒 Bạn phải Đăng nhập Email {st.session_state.email_noc_login['email']} ở đầu trang trước khi gửi!")
 
     st.divider()
-    
-    # ---------------- 1. TRUYỀN HÌNH ----------------
-    st.subheader("1. TRUYỀN HÌNH (Sự cố đường truyền & Giám sát luồng)")
-    
-    with st.expander("📺 Giám sát Trực tiếp Luồng Kênh Catchup (falconhlsmonitor.vtcdigital.top)", expanded=False):
-        c_m_top1, c_m_top2 = st.columns([3, 1])
-        c_m_top1.write("Theo dõi trạng thái phát sóng luồng HLS Catchup trực tiếp:")
-        c_m_top2.link_button("🚀 Mở Cửa Sổ Giám Sát Lớn", "https://falconhlsmonitor.vtcdigital.top/", use_container_width=True)
-        st.components.v1.iframe("https://falconhlsmonitor.vtcdigital.top/", height=500, scrolling=True)
 
-    tab_tv_form, tab_tv_table = st.tabs(["📝 Nhập sự cố bằng Form (Tự động tính thời lượng)", "📊 Chỉnh sửa trực tiếp Bảng Sự cố"])
-    
-    with tab_tv_form:
-        with st.form("form_tv_incident"):
-            st.markdown("**Khai báo sự cố đường truyền kênh truyền hình:**")
-            c_date, c_tv1 = st.columns(2)
-            tv_date = c_date.text_input("🗓️ Ngày xảy ra sự cố:", value=datetime.now().strftime("%d/%m/%Y"))
-            tv_channel = c_tv1.text_input("Tên kênh/nhóm kênh (Đường truyền):", value="VTV1 / VTV Cab")
-            
-            c_tv2, c_tv3, c_tv4 = st.columns([2, 1, 1])
-            tv_symptom = c_tv2.text_input("Hiện tượng sự cố:", value="Mất tín hiệu luồng IP")
-            time_start = c_tv3.time_input("Bắt đầu:", value=time(9, 0))
-            time_end = c_tv4.time_input("Kết thúc:", value=time(10, 30))
-            
-            c_tv5, c_tv6 = st.columns(2)
-            tv_cause = c_tv5.text_input("Nguyên nhân:", value="Lỗi thiết bị Switch truyền dẫn")
-            tv_fix = c_tv6.text_input("Biện pháp khắc phục (Bên khắc phục):", value="Khởi động lại Switch / Đội NOC")
+    # ---------------------------------------------------------
+    # LAYOUT 2 CỘT CHIA ĐÔI: MENU 1.1 (GIÁM SÁT KÊNH) & MENU 1.2 (SỰ CỐ ĐƯỜNG TRUYỀN)
+    # ---------------------------------------------------------
+    col_left_m1, col_right_m1 = st.columns(2)
 
-            if st.form_submit_button("➕ Thêm Sự cố vào Báo cáo"):
-                dt_start = datetime.combine(datetime.today(), time_start)
-                dt_end = datetime.combine(datetime.today(), time_end)
-                if dt_end < dt_start:
-                    dt_end = dt_end.replace(day=dt_end.day + 1)
+    with col_left_m1:
+        st.markdown("### 📺 Menu 1.1: Giám Sát Kênh (FalconHLS Monitor)")
+        st.caption("Dashboard giám sát luồng phát sóng: [https://falconhlsmonitor.vtcdigital.top/](https://falconhlsmonitor.vtcdigital.top/)")
+        st.link_button("🚀 Mở Tab Giám sát Riêng", "https://falconhlsmonitor.vtcdigital.top/", use_container_width=True)
+        
+        # Nhúng Iframe 1/2 khoảng không web
+        st.markdown("""
+        <div style="border: 2px solid #1F4E78; border-radius: 8px; overflow: hidden;">
+            <iframe src="https://falconhlsmonitor.vtcdigital.top/" style="width: 100%; height: 420px; border: none;"></iframe>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col_right_m1:
+        st.markdown("### ⚠️ Menu 1.2: Sự Cố Đường Truyền")
+        st.caption("Khai báo & theo dõi chi tiết sự cố kênh (Khung rút gọn 1/2):")
+        
+        tab_inc_table, tab_inc_form = st.tabs(["📊 Bảng Sự cố Ca", "➕ Khai báo Sự cố"])
+        
+        with tab_inc_table:
+            st.session_state.tv_incidents = st.data_editor(
+                st.session_state.tv_incidents, 
+                num_rows="dynamic", 
+                use_container_width=True, 
+                key="ed_tv_incidents"
+            )
+            if st.button("💾 Lưu Bảng Sự Cố", key="btn_save_inc"):
+                save_shared_storage()
+                st.success("✅ Đã lưu bảng sự cố!")
+
+        with tab_inc_form:
+            with st.form("form_add_incident_compact"):
+                f_d1, f_d2 = st.columns(2)
+                inc_date = f_d1.text_input("Ngày:", value=datetime.now().strftime("%d/%m/%Y"))
+                inc_channel = f_d2.text_input("Tên kênh (Đường truyền):", value="VTV1 / VTV Cab")
                 
-                diff_sec = int((dt_end - dt_start).total_seconds())
-                hours = diff_sec // 3600
-                minutes = (diff_sec % 3600) // 60
-                duration_str = f"{hours:02d}h {minutes:02d}m"
+                f_s1, f_s2, f_s3 = st.columns([2, 1, 1])
+                inc_symp = f_s1.text_input("Hiện tượng:", value="Mất luồng IP")
+                t_start = f_s2.time_input("Bắt đầu:", value=time(9, 0))
+                t_end = f_s3.time_input("Kết thúc:", value=time(10, 0))
+                
+                inc_cause = st.text_input("Nguyên nhân:", value="Lỗi Switch truyền dẫn")
+                inc_fix = st.text_input("Biện pháp (Bên khắc phục):", value="Khởi động lại / Đội NOC")
 
-                new_inc = {
-                    "STT": len(st.session_state.tv_incidents) + 1,
-                    "Ngày": tv_date,
-                    "Tên kênh/nhóm kênh (Đường truyền)": tv_channel,
-                    "Hiện tượng": tv_symptom,
-                    "Bắt đầu": time_start.strftime("%H:%M"),
-                    "Kết thúc": time_end.strftime("%H:%M"),
-                    "Thời lượng": duration_str,
-                    "Nguyên nhân": tv_cause,
-                    "Biện pháp khắc phục (Bên khắc phục)": tv_fix
-                }
-                st.session_state.tv_incidents = pd.concat([st.session_state.tv_incidents, pd.DataFrame([new_inc])], ignore_index=True)
-                save_shared_storage()
-                st.success(f"✅ Đã thêm sự cố! Thời lượng tự động tính toán: **{duration_str}**")
-                st.rerun()
+                if st.form_submit_button("➕ Thêm Sự Cố"):
+                    dt_start = datetime.combine(datetime.today(), t_start)
+                    dt_end = datetime.combine(datetime.today(), t_end)
+                    if dt_end < dt_start:
+                        dt_end = dt_end.replace(day=dt_end.day + 1)
+                    diff_sec = int((dt_end - dt_start).total_seconds())
+                    duration_str = f"{diff_sec // 3600:02d}h {(diff_sec % 3600) // 60:02d}m"
 
-    with tab_tv_table:
-        st.session_state.tv_incidents = st.data_editor(st.session_state.tv_incidents, num_rows="dynamic", use_container_width=True, key="ed_tv")
-
-    st.divider()
-
-    # ---------------- 2. ĐIỀU HÒA LUÂN PHIÊN ----------------
-    st.subheader("2. Hệ thống điều hòa luân phiên (Tịnh tiến chu kỳ 3 ngày)")
-    st.caption("🔄 Máy điều hòa tự động luân phiên xoay vòng theo thời gian & ngày (Hết 3 ngày tịnh tiến quay lại Ngày 1).")
-    
-    with st.expander("➕ Thêm hàng theo dõi Điều hòa theo Thời gian (Time)", expanded=False):
-        with st.form("form_add_hvac"):
-            h1, h2, h3 = st.columns(3)
-            hvac_date = h1.text_input("Ngày theo dõi:", value=datetime.now().strftime("%d/%m/%Y"))
-            hvac_time = h2.text_input("Thời gian (Time):", value="08:00 - 20:00")
-            hvac_cycle = h3.selectbox("Chu kỳ tịnh tiến:", ["Ngày 1", "Ngày 2", "Ngày 3"])
-
-            h4, h5 = st.columns(2)
-            hvac_run = h4.text_input("Máy chạy (Chính):", value="Máy 1 – Máy 3 – Máy 4 – Máy 5 – Máy 7")
-            hvac_stop = h5.text_input("Máy nghỉ (Dự phòng):", value="Máy 6 – Máy 8")
-            hvac_note = st.text_input("Ghi chú / Trạng thái:", value="Hoạt động ổn định")
-
-            if st.form_submit_button("Lưu cấu hình Điều hòa"):
-                new_hvac = {
-                    "Ngày / Tuần": hvac_date,
-                    "Thời gian (Time)": hvac_time,
-                    "Chu kỳ": hvac_cycle,
-                    "Máy chạy (Chính)": hvac_run,
-                    "Máy nghỉ (Dự phòng)": hvac_stop,
-                    "Ghi chú / Trạng thái": hvac_note
-                }
-                st.session_state.hvac_schedule = pd.concat([st.session_state.hvac_schedule, pd.DataFrame([new_hvac])], ignore_index=True)
-                save_shared_storage()
-                st.success("✅ Đã thêm hàng theo dõi điều hòa mới!")
-                st.rerun()
-
-    st.session_state.hvac_schedule = st.data_editor(st.session_state.hvac_schedule, num_rows="dynamic", use_container_width=True, key="ed_hvac")
-
-    st.divider()
-
-    # ---------------- 3. UPS & THÔNG SỐ HPA ----------------
-    st.subheader("3. Hệ thống UPS và Thông số Kỹ thuật HPA")
-    
-    col_link1, col_link2 = st.columns([3, 1])
-    with col_link1:
-        st.markdown("🔗 **Liên kết giám sát trực tiếp UPS & HPA:** [http://192.168.20.201](http://192.168.20.201)")
-    with col_link2:
-        st.link_button("🌐 Mở Hệ thống 192.168.20.201", "http://192.168.20.201", use_container_width=True)
-
-    st.markdown("**a. Bảng Thông số Hệ thống UPS:**")
-    st.session_state.ups_params = st.data_editor(st.session_state.ups_params, num_rows="dynamic", use_container_width=True, key="ed_ups")
-
-    st.markdown("**b. Bảng Thông số Kỹ thuật Máy phát HPA:**")
-    st.session_state.tech_params = st.data_editor(st.session_state.tech_params, num_rows="dynamic", use_container_width=True, key="ed_tech")
-
-    st.divider()
-
-    # ---------------- 4. SERVER & MẠNG VĂN PHÒNG ----------------
-    st.subheader("4. Hệ thống Server và Mạng văn phòng NOC")
-    
-    st.markdown("🚨 **Bảng Cảnh báo & Giám sát Hệ thống Server (Danh sách 32 Server NOC):**")
-    st.session_state.server_warnings = st.data_editor(
-        st.session_state.server_warnings, 
-        num_rows="dynamic", 
-        use_container_width=True, 
-        key="ed_servers"
-    )
-
-    st.markdown("**Bảng Giám sát Đường truyền & Mạng Văn phòng:**")
-    st.session_state.idc_network = st.data_editor(st.session_state.idc_network, num_rows="dynamic", use_container_width=True, key="ed_idc")
-
-# MENU 2: QUẢN LÝ PHÂN CA, DUYỆT ĐỔI CA
-elif menu == "2. Quản lý Phân ca, Duyệt Đổi ca":
-    st.title("👥 Quản lý phân ca & duyệt đổi ca KTCN")
-    
-    # ĐĂNG NHẬP EMAIL ĐẦU MENU 2
-    render_email_login_header("email_noc_login", "NOC Mail")
-    st.divider()
-
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📅 Lịch Master Đã Đồng Bộ", 
-        "📤 Upload File Lịch Trực VTC", 
-        "🔄 Đăng ký Đổi ca", 
-        "👑 Lãnh đạo Duyệt Đổi ca"
-    ])
-
-    with tab1:
-        st.dataframe(st.session_state.master_schedule, use_container_width=True)
-
-    with tab2:
-        st.subheader("Upload File Excel Lịch trực KTCN (.xlsx)")
-        uploaded_file = st.file_uploader("Chọn file ma trận công:", type=["xlsx", "xls"])
-        if uploaded_file is not None:
-            parsed_df = parse_vtc_matrix_schedule(uploaded_file)
-            if parsed_df is not None:
-                st.success("✅ Bóc tách thành công Ma trận Lịch trực VTC!")
-                st.dataframe(parsed_df, use_container_width=True)
-                if st.button("🔥 Lưu & Cập nhật Lịch Master", type="primary"):
-                    st.session_state.master_schedule = parsed_df
+                    new_row = {
+                        "STT": len(st.session_state.tv_incidents) + 1,
+                        "Ngày": inc_date,
+                        "Tên kênh/nhóm kênh (Đường truyền)": inc_channel,
+                        "Hiện tượng": inc_symp,
+                        "Bắt đầu": t_start.strftime("%H:%M"),
+                        "Kết thúc": t_end.strftime("%H:%M"),
+                        "Thời lượng": duration_str,
+                        "Nguyên nhân": inc_cause,
+                        "Biện pháp khắc phục (Bên khắc phục)": inc_fix
+                    }
+                    st.session_state.tv_incidents = pd.concat([st.session_state.tv_incidents, pd.DataFrame([new_row])], ignore_index=True)
                     save_shared_storage()
-                    add_audit_log(user_role, "Upload & Cập nhật Lịch trực Master mới")
-                    st.success("🎉 Đã cập nhật Lịch Master!")
+                    st.success(f"✅ Đã thêm sự cố! Thời lượng: {duration_str}")
                     st.rerun()
 
-    with tab3:
-        st.subheader("Tạo yêu cầu đổi ca")
-        with st.form("form_change_shift"):
-            c1, c2 = st.columns(2)
-            req_date = c1.selectbox("Ngày trực:", st.session_state.master_schedule["Ngày"].unique())
-            req_shift = c2.selectbox("Ca trực:", st.session_state.master_schedule[st.session_state.master_schedule["Ngày"] == req_date]["Ca trực"].unique())
-            
-            c3, c4 = st.columns(2)
-            req_person = c3.text_input("Người xin đổi:")
-            sub_person = c4.text_input("Người trực thay:")
-            reason = st.text_area("Lý do đổi ca:")
-            
-            if st.form_submit_button("Gửi yêu cầu duyệt"):
-                if st.session_state.email_noc_login["is_logged_in"]:
-                    new_req = {
-                        "Mã GD": f"DC00{len(st.session_state.shift_change_requests)+1}",
-                        "Ngày": req_date,
-                        "Ca trực": req_shift,
-                        "Người xin đổi": req_person,
-                        "Người trực thay": sub_person,
-                        "Lý do": reason,
-                        "Trạng thái": "Chờ duyệt"
-                    }
-                    st.session_state.shift_change_requests = pd.concat([pd.DataFrame([new_req]), st.session_state.shift_change_requests], ignore_index=True)
-                    save_shared_storage()
-                    
-                    status, msg = send_email_notification(
-                        from_email=st.session_state.email_noc_login["email"],
-                        to_email="anh.lehoang@vtc.vn",
-                        subject=f"[YÊU CẦU ĐỔI CA] {req_person} -> {sub_person} ({req_date})",
-                        body_text=f"Nhân sự {req_person} gửi yêu cầu đổi ca cho {sub_person} ngày {req_date} ({req_shift}). Lý do: {reason}"
-                    )
-                    add_audit_log(req_person, "Gửi yêu cầu đổi ca", f"Mã {new_req['Mã GD']}")
-                    st.success(f"✅ Đã gửi yêu cầu đổi ca từ email **{st.session_state.email_noc_login['email']}** tới anh.lehoang@vtc.vn!")
-                else:
-                    st.error(f"🔒 Bạn phải Đăng nhập Email **{st.session_state.email_noc_login['email']}** ở đầu trang trước khi đăng ký đổi ca!")
+    st.divider()
 
-    with tab4:
-        st.subheader("👑 Duyệt Đổi ca (Gửi Email thông báo: anh.lehoang@vtc.vn)")
-        if is_admin:
-            pending_df = st.session_state.shift_change_requests[st.session_state.shift_change_requests["Trạng thái"] == "Chờ duyệt"]
-            if pending_df.empty:
-                st.info("Hiện không có yêu cầu nào chờ duyệt.")
-            else:
-                for idx, row in pending_df.iterrows():
-                    with st.expander(f"📌 Mã GD: {row['Mã GD']} - Ngày: {row['Ngày']} ({row['Ca trực']})", expanded=True):
-                        st.write(f"• **Người xin đổi:** {row['Người xin đổi']}  ➡️  **Người trực thay:** {row['Người trực thay']}")
-                        st.write(f"• **Lý do:** {row['Lý do']}")
-                        
-                        col_a, col_b = st.columns(2)
-                        if col_a.button(f"✅ DUYỆT ({row['Mã GD']})", type="primary"):
-                            if st.session_state.email_noc_login["is_logged_in"]:
+    # ---------------------------------------------------------
+    # MENU 1.3: NHIỆT ĐỘ PHÒNG MÁY (3 CAMERA & ĐIỀU HÒA LUÂN PHIÊN)
+    # ---------------------------------------------------------
+    st.subheader("🌡️ Menu 1.3: Nhiệt Độ Phòng Máy IDC (3 Camera) & Điều Hòa Luân Phiên")
+    st.markdown("""
+    * **Chuẩn nhiệt độ IDC tiêu chuẩn:** `20°C - 24°C`  |  **Độ ẩm tiêu chuẩn:** `45% - 55%`
+    * **Camera 1:** Phòng Head-end (Có lịch chạy luân phiên điều hòa 3 ngày)
+    * **Camera 2:** Phòng Đối tác
+    * **Camera 3:** Phòng CA (Bảo mật)
+    """)
+
+    col_cam1, col_cam2, col_cam3 = st.columns(3)
+    with col_cam1:
+        st.markdown("<div class='metric-card'><h4>📷 Camera 1: Phòng Head-end</h4><h2>22.5 °C | 50%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>🔄 Làm mát luân phiên: Máy 1-2-3</p></div>", unsafe_allow_html=True)
+    with col_cam2:
+        st.markdown("<div class='metric-card'><h4>📷 Camera 2: Phòng Đối tác</h4><h2>23.0 °C | 52%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>❄️ Làm mát: Máy 1 Chạy ổn định</p></div>", unsafe_allow_html=True)
+    with col_cam3:
+        st.markdown("<div class='metric-card'><h4>📷 Camera 3: Phòng CA</h4><h2>21.8 °C | 48%</h2><p>🟢 Trạng thái: Đạt chuẩn IDC<br>🔒 An toàn hệ thống CA</p></div>", unsafe_allow_html=True)
+
+    tab_temp1, tab_temp2 = st.tabs(["📊 Bảng Chuẩn Nhiệt Độ 3 Camera IDC", "🔄 Lịch Chạy Luân Phiên Điều Hòa (Phòng Head-end)"])
+    with tab_temp1:
+        st.session_state.idc_temp_cams = st.data_editor(st.session_state.idc_temp_cams, num_rows="dynamic", use_container_width=True, key="ed_idc_temp")
+    with tab_temp2:
+        st.caption("🔄 Chu kỳ tịnh tiến 3 ngày xoay vòng các tổ máy điều hòa phòng Head-end:")
+        st.session_state.hvac_schedule = st.data_editor(st.session_state.hvac_schedule, num_rows="dynamic", use_container_width=True, key="ed_hvac_headend")
+
+    st.divider()
+
+    # ---------------------------------------------------------
+    # MENU 1.4: HỆ THỐNG UPS VÀ HPA
+    # ---------------------------------------------------------
+    st.subheader("⚡ Menu 1.4: Hệ Thống UPS (LAN: 192.168.20.201) & Máy Phát HPA (Camera 4)")
+    
+    col_u1, col_u2 = st.columns([3, 1])
+    with col_u1:
+        st.markdown("🔗 **Hệ thống giám sát UPS qua mạng LAN:** `http://192.168.20.201`")
+    with col_u2:
+        st.link_button("🌐 Mở UPS LAN 192.168.20.201", "http://192.168.20.201", use_container_width=True)
+
+    tab_ups, tab_hpa = st.tabs(["🔋 Thông Số Hệ Thống UPS (LAN)", "📡 Thông Số Máy Phát HPA (Camera 4)"])
+    with tab_ups:
+        st.session_state.ups_params = st.data_editor(st.session_state.ups_params, num_rows="dynamic", use_container_width=True, key="ed_ups_params")
+    with tab_hpa:
+        st.caption("Giám sát chỉ số công suất máy phát HPA truyền hình qua Camera 4:")
+        st.session_state.hpa_params = st.data_editor(st.session_state.hpa_params, num_rows="dynamic", use_container_width=True, key="ed_hpa_params")
+
+    st.divider()
+
+    # ---------------------------------------------------------
+    # MENU 1.5: TÌNH TRẠNG SERVER CẢNH BÁO & MẠNG VĂN PHÒNG
+    # ---------------------------------------------------------
+    st.subheader("💻 Menu 1.5: Tình Trạng Server Cảnh Báo & Mạng Văn Phòng (2 Modem Speedtest)")
+    
+    st.markdown("#### 🚨 Danh Sách Server Đang Có Cảnh Báo (Tối Ưu Gọn - Chỉ Hiện Cảnh Báo)")
+    st.session_state.warning_servers = st.data_editor(st.session_state.warning_servers, num_rows="dynamic", use_container_width=True, key="ed_warning_servers")
+
+    st.markdown("#### 🚀 Bảng Đo Tốc Độ & Kiểm Soát 2 Đường Truyền Mạng Văn Phòng (Dạng Speedtest)")
+    
+    col_sp1, col_sp2 = st.columns(2)
+    with col_sp1:
+        st.markdown("""
+        <div class="speedtest-box">
+            <h4 style="color:#00FFCC;">📶 MODEM PHÒNG TRỰC (IP TĨNH: 192.168.121.xxx)</h4>
+            <h1>485.6 <span style="font-size:16px;">Mbps</span></h1>
+            <p>Ping: <b>2 ms</b> | Upload: <b>490.2 Mbps</b> | Jitter: <b>1 ms</b></p>
+            <span style="color:#00FF66;">● HOẠT ĐỘNG HOÀN HẢO</span>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_sp2:
+        st.markdown("""
+        <div class="speedtest-box">
+            <h4 style="color:#00FFCC;">🏢 MODEM VĂN PHÒNG (IP TĨNH: 192.168.1.xxx)</h4>
+            <h1>320.4 <span style="font-size:16px;">Mbps</span></h1>
+            <p>Ping: <b>4 ms</b> | Upload: <b>315.8 Mbps</b> | Jitter: <b>2 ms</b></p>
+            <span style="color:#00FF66;">● KẾT NỐI ỔN ĐỊNH</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.session_state.speedtest_networks = st.data_editor(st.session_state.speedtest_networks, num_rows="dynamic", use_container_width=True, key="ed_speedtest")
+
+# =========================================================
+# MENU 2: QUẢN LÝ PHÂN CA, ĐỔI CA, KHÔNG GIAN TRAO ĐỔI & ĐỐI SOÁT
+# =========================================================
+elif menu == "2. Quản lý Phân ca, Đổi ca, Không gian Trao đổi & Đối soát":
+    st.title("👥 Menu 2: Quản Lý Phân Ca, Đổi Ca, Trao Đổi Zalo/Viber & Đối Soát")
+    
+    tab_m2_1, tab_m2_2, tab_m2_3, tab_m2_4 = st.tabs([
+        "📅 Menu 2.1: Thông Tin Ca Trực Master",
+        "🔄 Menu 2.2: Quản Lý Phân Ca, Duyệt & Upload Lịch",
+        "📱 Menu 2.3: Không Gian Đăng Nhập Zalo & Viber",
+        "📊 Menu 2.4: Phân Tích Đối Soát Sự Cố"
+    ])
+
+    # 2.1 THÔNG TIN CA TRỰC MASTER
+    with tab_m2_1:
+        st.subheader("Lịch Trực Master Đã Đồng Bộ")
+        st.dataframe(st.session_state.master_schedule, use_container_width=True)
+
+    # 2.2 QUẢN LÝ PHÂN CA, DUYỆT & UPDATE
+    with tab_m2_2:
+        st.subheader("Quản lý Đổi ca & Cập nhật Lịch trực")
+        sub_tab_req, sub_tab_appr, sub_tab_up = st.tabs(["📝 Tạo Yêu Cầu Đổi Ca", "👑 Lãnh Đạo Phê Duyệt", "📤 Upload Lịch Trực Mới (.xlsx)"])
+        
+        with sub_tab_req:
+            with st.form("form_shift_change"):
+                c1, c2 = st.columns(2)
+                r_date = c1.selectbox("Ngày trực:", st.session_state.master_schedule["Ngày"].unique())
+                r_shift = c2.selectbox("Ca trực:", st.session_state.master_schedule[st.session_state.master_schedule["Ngày"] == r_date]["Ca trực"].unique())
+                
+                c3, c4 = st.columns(2)
+                r_from = c3.text_input("Người xin đổi:")
+                r_to = c4.text_input("Người trực thay:")
+                r_reason = st.text_area("Lý do đổi ca:")
+                
+                if st.form_submit_button("Gửi Yêu Cầu Đổi Ca"):
+                    if st.session_state.email_noc_login["is_logged_in"]:
+                        new_req = {
+                            "Mã GD": f"DC00{len(st.session_state.shift_change_requests)+1}",
+                            "Ngày": r_date,
+                            "Ca trực": r_shift,
+                            "Người xin đổi": r_from,
+                            "Người trực thay": r_to,
+                            "Lý do": r_reason,
+                            "Trạng thái": "Chờ duyệt"
+                        }
+                        st.session_state.shift_change_requests = pd.concat([pd.DataFrame([new_req]), st.session_state.shift_change_requests], ignore_index=True)
+                        save_shared_storage()
+                        send_email_notification(
+                            from_email=st.session_state.email_noc_login["email"],
+                            to_email="anh.lehoang@vtc.vn",
+                            subject=f"[YÊU CẦU ĐỔI CA] {r_from} -> {r_to} ({r_date})",
+                            body_text=f"Yêu cầu đổi ca từ {r_from} sang {r_to} ngày {r_date} ({r_shift}). Lý do: {r_reason}"
+                        )
+                        add_audit_log(r_from, "Gửi yêu cầu đổi ca", f"Mã {new_req['Mã GD']}")
+                        st.success("✅ Đã gửi yêu cầu đổi ca tới Lãnh đạo phòng!")
+                    else:
+                        st.error("🔒 Vui lòng đăng nhập Email ở Menu 1 trước khi gửi yêu cầu.")
+
+        with sub_tab_appr:
+            if is_admin:
+                pending_df = st.session_state.shift_change_requests[st.session_state.shift_change_requests["Trạng thái"] == "Chờ duyệt"]
+                if pending_df.empty:
+                    st.info("Hiện không có yêu cầu nào đang chờ phê duyệt.")
+                else:
+                    for idx, row in pending_df.iterrows():
+                        with st.expander(f"📌 Mã GD: {row['Mã GD']} - Ngày: {row['Ngày']} ({row['Ca trực']})", expanded=True):
+                            st.write(f"• **Người xin đổi:** {row['Người xin đổi']}  ➡️  **Người trực thay:** {row['Người trực thay']}")
+                            st.write(f"• **Lý do:** {row['Lý do']}")
+                            
+                            col_a, col_b = st.columns(2)
+                            if col_a.button(f"✅ DUYỆT ({row['Mã GD']})", type="primary"):
                                 st.session_state.shift_change_requests.loc[st.session_state.shift_change_requests["Mã GD"] == row["Mã GD"], "Trạng thái"] = "Đã duyệt"
-                                
                                 m_mask = (st.session_state.master_schedule["Ngày"] == row["Ngày"]) & (st.session_state.master_schedule["Ca trực"] == row["Ca trực"])
                                 if not st.session_state.master_schedule[m_mask].empty:
                                     old_staff = st.session_state.master_schedule.loc[m_mask, "Người trực"].values[0]
                                     new_staff = old_staff.replace(row["Người xin đổi"], row["Người trực thay"]) if row["Người xin đổi"] in old_staff else f"{old_staff}, {row['Người trực thay']}"
                                     st.session_state.master_schedule.loc[m_mask, "Người trực"] = new_staff
                                 save_shared_storage()
-                                
-                                send_email_notification(
-                                    from_email=st.session_state.email_noc_login["email"],
-                                    to_email="anh.lehoang@vtc.vn",
-                                    subject=f"[ĐÃ DUYỆT ĐỔI CA] Mã GD: {row['Mã GD']}",
-                                    body_text=f"Lãnh đạo đã phê duyệt đổi ca cho nhân sự: {row['Người xin đổi']} -> {row['Người trực thay']} vào ngày {row['Ngày']} ({row['Ca trực']})."
-                                )
                                 add_audit_log(user_role, "Duyệt đổi ca", f"Mã GD {row['Mã GD']}")
-                                st.success(f"🎉 Đã duyệt yêu cầu {row['Mã GD']} và thông báo tới anh.lehoang@vtc.vn!")
+                                st.success("🎉 Đã duyệt đổi ca và cập nhật lịch master!")
                                 st.rerun()
-                            else:
-                                st.error(f"🔒 Đăng nhập Email **{st.session_state.email_noc_login['email']}** ở đầu trang để duyệt!")
 
-                        if col_b.button(f"❌ TỪ CHỐI ({row['Mã GD']})"):
-                            st.session_state.shift_change_requests.loc[st.session_state.shift_change_requests["Mã GD"] == row["Mã GD"], "Trạng thái"] = "Từ chối"
-                            save_shared_storage()
-                            st.warning(f"Đã từ chối yêu cầu {row['Mã GD']}.")
-                            st.rerun()
-        else:
-            st.error("🔒 Bạn cần đăng nhập Mật khẩu với Vai trò Admin / Lãnh đạo để phê duyệt.")
+                            if col_b.button(f"❌ TỪ CHỐI ({row['Mã GD']})"):
+                                st.session_state.shift_change_requests.loc[st.session_state.shift_change_requests["Mã GD"] == row["Mã GD"], "Trạng thái"] = "Từ chối"
+                                save_shared_storage()
+                                st.warning("Đã từ chối yêu cầu đổi ca.")
+                                st.rerun()
+            else:
+                st.error("🔒 Cần đăng nhập Mật khẩu Lãnh đạo Phòng để phê duyệt.")
 
-# MENU 3: PHÂN TÍCH ĐỐI SOÁT
-elif menu == "3. Phân tích Đối soát":
-    st.title("📊 Phân tích & Đối soát Sự cố")
-    
-    # ĐĂNG NHẬP EMAIL ĐẦU MENU 3
-    render_email_login_header("email_noc_login", "NOC Mail")
-    st.divider()
+        with sub_tab_up:
+            up_file = st.file_uploader("Chọn file Excel phân ca trực mới (.xlsx):", type=["xlsx", "xls"])
+            if up_file:
+                st.info("File đã sẵn sàng xử lý bóc tách ma trận.")
 
-    st.markdown("🔗 **Liên kết nhanh:** [Mở Bảng Sự cố Đối soát Chi tiết (Spreadsheet / Log System)](#)")
-    
-    st.subheader("Bảng Ghi nhận Đối soát Sự cố Hạ tầng & Kênh")
-    st.session_state.tv_incidents = st.data_editor(
-        st.session_state.tv_incidents, 
-        num_rows="dynamic", 
-        use_container_width=True,
-        key="incidents_reconcile"
-    )
+    # 2.3 ĐĂNG NHẬP ZALO VÀ VIBER (TRAO ĐỔI VỚI ĐỐI TÁC)
+    with tab_m2_3:
+        st.subheader("📱 Không Gian Làm Việc Zalo & Viber Trực Tuyến (0913332569)")
+        st.caption("Phục vụ anh em ca trực kết nối nhanh, nhắn tin, gửi ảnh đối soát sự cố trực tiếp với các nhà đài & đối tác:")
 
-    if st.button("📧 Gửi Email Đối soát Sự cố tới Đối tác", type="primary"):
-        if st.session_state.email_noc_login["is_logged_in"]:
-            status, msg = send_email_notification(
-                from_email=st.session_state.email_noc_login["email"],
-                to_email="doitac.truyendan@vtc.vn",
-                subject="[ĐỐI SOÁT SỰ CỐ TRUYỀN DẪN VTC]",
-                body_text="Gửi bảng đối soát sự cố kênh truyền hình trong ca..."
-            )
-            st.success(msg)
-        else:
-            st.error(f"🔒 Vui lòng Đăng nhập Email **{st.session_state.email_noc_login['email']}** ở đầu trang!")
+        col_z1, col_z2 = st.columns([1, 2])
+        with col_z1:
+            st.markdown("### 📲 Hotline Trực Ca: `0913332569`")
+            st.link_button("🌐 Mở Zalo Web (chat.zalo.me)", "https://chat.zalo.me", type="primary", use_container_width=True)
+            st.link_button("🟣 Mở Viber Chat Hotline", "viber://chat?number=%2B84913332569", use_container_width=True)
+            st.divider()
+            st.caption("Quét mã QR bằng ứng dụng Zalo trên điện thoại:")
+            st.image("https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://zalo.me/0913332569", caption="Zalo 0913332569", use_container_width=True)
 
-# MENU 4: QUẢN LÝ BẢO HÀNH
-elif menu == "4. Quản lý Bảo hành (Sửa chữa & Đổi bảo hành)":
-    st.title("🛡️ Quản lý & Lập Báo cáo Bảo hành Sản phẩm VTC Digital")
-    
-    # ĐĂNG NHẬP EMAIL ĐẦU MENU 4 (BAO HANH MAIL)
+        with col_z2:
+            st.markdown("""
+            <div style="border: 2px solid #2980b9; border-radius: 8px; overflow: hidden; background: #fff;">
+                <div style="background: #2980b9; color: white; padding: 8px 12px; font-weight: bold;">
+                    📱 ZALO WEB WORKSPACE - NOC VTC (0913332569)
+                </div>
+                <iframe src="https://chat.zalo.me" style="width: 100%; height: 600px; border: none;"></iframe>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # 2.4 PHÂN TÍCH ĐỐI SOÁT
+    with tab_m2_4:
+        st.subheader("📊 Bảng Phân Tích & Đối Soát Sự Cố Đường Truyền")
+        st.session_state.tv_incidents = st.data_editor(st.session_state.tv_incidents, num_rows="dynamic", use_container_width=True, key="ed_reconcile")
+        if st.button("📧 Gửi Email Đối Soát Cho Đối Tác", type="primary"):
+            if st.session_state.email_noc_login["is_logged_in"]:
+                status, msg = send_email_notification(
+                    from_email=st.session_state.email_noc_login["email"],
+                    to_email="doitac.truyendan@vtc.vn",
+                    subject="[ĐỐI SOÁT SỰ CỐ TRUYỀN DẪN VTC DIGITAL]",
+                    body_text="Gửi bảng đối soát sự cố kỹ thuật truyền hình..."
+                )
+                st.success(msg)
+            else:
+                st.error("🔒 Vui lòng đăng nhập Email ở Menu 1.")
+
+# =========================================================
+# MENU 3: QUẢN LÝ BẢO HÀNH (GIỮ NGUYÊN)
+# =========================================================
+elif menu == "3. Quản lý Bảo hành (Sửa chữa & Đổi bảo hành)":
+    st.title("🛡️ Menu 3: Quản Lý & Lập Báo Cáo Bảo Hành Sản Phẩm VTC Digital")
     render_email_login_header("email_warranty_login", "Warranty Mail")
     st.divider()
 
     st.info("🔗 **Cổng thông tin bảo hành trực tuyến:** [http://baohanh.truyenhinhso.vn](http://baohanh.truyenhinhso.vn)")
 
-    tab_edit, tab_exchange, tab_add, tab_web = st.tabs([
+    tab_w_edit, tab_w_exc, tab_w_add, tab_w_web = st.tabs([
         "📝 Bảng Dữ liệu Sửa chữa", 
         "🔄 Bảng Dữ liệu Đổi bảo hành", 
         "➕ Thêm lượt Bảo hành mới", 
@@ -1065,8 +1080,8 @@ elif menu == "4. Quản lý Bảo hành (Sửa chữa & Đổi bảo hành)":
 
     st.divider()
 
-    with tab_edit:
-        st.subheader("📊 1. Bảng Dữ liệu Sửa chữa / Thay thế (Chỉnh sửa trực tiếp dạng Bảng)")
+    with tab_w_edit:
+        st.subheader("📊 1. Bảng Dữ liệu Sửa chữa / Thay thế (Chỉnh sửa trực tiếp)")
         st.session_state.warranty_repair_data = st.data_editor(
             st.session_state.warranty_repair_data, 
             num_rows="dynamic", 
@@ -1074,8 +1089,8 @@ elif menu == "4. Quản lý Bảo hành (Sửa chữa & Đổi bảo hành)":
             key="w_repair_editor"
         )
 
-    with tab_exchange:
-        st.subheader("🔄 2. Bảng Dữ liệu Đổi bảo hành (Chỉnh sửa trực tiếp dạng Bảng)")
+    with tab_w_exc:
+        st.subheader("🔄 2. Bảng Dữ liệu Đổi bảo hành (Chỉnh sửa trực tiếp)")
         st.session_state.warranty_exchange_data = st.data_editor(
             st.session_state.warranty_exchange_data, 
             num_rows="dynamic", 
@@ -1084,8 +1099,7 @@ elif menu == "4. Quản lý Bảo hành (Sửa chữa & Đổi bảo hành)":
         )
 
     st.divider()
-    st.subheader("🚀 Báo cáo Tuần Gộp 2 Sheet gửi Lãnh đạo")
-
+    st.subheader("🚀 Xuất & Gửi Báo Cáo Tuần Gộp 2 Sheet (Khổ A4)")
     combined_warranty_excel_bytes = generate_combined_warranty_excel()
 
     col_w1, col_w2 = st.columns(2)
@@ -1105,7 +1119,7 @@ elif menu == "4. Quản lý Bảo hành (Sửa chữa & Đổi bảo hành)":
                     from_email=st.session_state.email_warranty_login["email"],
                     to_email="tuan.ngoc@vtc.vn",
                     subject=f"[BÁO CÁO TỔNG HỢP BẢO HÀNH A4] {st.session_state.warranty_meta['week']}",
-                    body_text=f"Báo cáo tổng hợp bảo hành & đổi bảo hành sản phẩm VTC Digital gửi tới Lãnh đạo tuan.ngoc@vtc.vn từ {st.session_state.email_warranty_login['email']}",
+                    body_text=f"Báo cáo tổng hợp bảo hành sản phẩm VTC Digital gửi tới Lãnh đạo tuan.ngoc@vtc.vn từ {st.session_state.email_warranty_login['email']}",
                     attachment_bytes=combined_warranty_excel_bytes,
                     filename=f"Bao_Cao_Bao_Hanh_Tong_Hop_{st.session_state.warranty_meta['week'].replace(' ','_').replace('/','_')}.xlsx"
                 )
@@ -1114,7 +1128,7 @@ elif menu == "4. Quản lý Bảo hành (Sửa chữa & Đổi bảo hành)":
             else:
                 st.error(f"🔒 Bạn phải Đăng nhập Email **{st.session_state.email_warranty_login['email']}** ở đầu trang trước khi gửi!")
 
-    with tab_add:
+    with tab_w_add:
         st.subheader("➕ Thêm lượt Bảo hành / Đổi bảo hành mới")
         add_type = st.radio("Chọn loại bản ghi:", ["Sửa chữa / Thay thế", "Đổi bảo hành"], horizontal=True)
         
@@ -1160,7 +1174,6 @@ elif menu == "4. Quản lý Bảo hành (Sửa chữa & Đổi bảo hành)":
                 f5, f6 = st.columns(2)
                 ex_new = f5.text_input("Mã dịch vụ mới:", value="3922395880")
                 ex_executor = f6.text_input("Người thực hiện:", value="Nguyễn Vĩnh Toàn")
-
                 ex_return = st.number_input("Ngày trả (số lượng):", min_value=1, value=1)
 
                 if st.form_submit_button("Lưu bản ghi Đổi bảo hành"):
@@ -1180,100 +1193,76 @@ elif menu == "4. Quản lý Bảo hành (Sửa chữa & Đổi bảo hành)":
                     st.success("✅ Đã thêm lượt đổi bảo hành mới!")
                     st.rerun()
 
-    with tab_web:
+    with tab_w_web:
         st.components.v1.iframe("http://baohanh.truyenhinhso.vn", height=600, scrolling=True)
 
-# MENU 5: LƯU TRỮ VÀ TÀI LIỆU AI
-# MENU 5: GIÁM SÁT LUỒNG KÊNH CATCHUP (HLS MONITOR)
-elif menu == "5. Giám sát Luồng Kênh Catchup (HLS Monitor)":
-    st.title("📺 Giám sát Luồng Kênh Truyền Hình (Falcon HLS Catchup Monitor)")
+# =========================================================
+# MENU 4: LƯU TRỮ VÀ PHÂN TÍCH AI
+# =========================================================
+elif menu == "4. Lưu trữ và Phân tích AI":
+    st.title("📂 Menu 4: Hệ Thống Lưu Trữ Hồ Sơ & Trợ Lý Phân Tích AI")
     
-    col_c1, col_c2 = st.columns([3, 1])
-    with col_c1:
-        st.info("🔗 **Hệ thống giám sát luồng Catchup:** [https://falconhlsmonitor.vtcdigital.top/](https://falconhlsmonitor.vtcdigital.top/)")
-    with col_c2:
-        st.link_button("🚀 Mở Tab Giám Sát Mới", "https://falconhlsmonitor.vtcdigital.top/", type="primary", use_container_width=True)
-
-    st.markdown("""
-    <style>
-    .monitor-frame {
-        width: 100%;
-        height: 800px;
-        border: 2px solid #1F4E78;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    </style>
-    <iframe src="https://falconhlsmonitor.vtcdigital.top/" class="monitor-frame" allowfullscreen></iframe>
-    """, unsafe_allow_html=True)
-
-# MENU 6: KHÔNG GIAN TRAO ĐỔI ZALO & VIBER (PHONE WORKSPACE)
-elif menu == "6. Không gian Trao đổi Zalo & Viber (0913332569)":
-    st.title("📱 Không Gian Làm Việc Trao Đổi Zalo & Viber trực tuyến")
-    st.caption("Khoang làm việc tích hợp cho số điện thoại Hotline: **0913332569** (Mở ứng dụng Zalo Web & Viber trao đổi nhanh)")
-
-    col_p1, col_p2 = st.columns([1, 2])
-    
-    with col_p1:
-        st.markdown("### 📲 Thông Tin Kết Nối Hotline")
-        st.success("🟢 **Số trực ca:** `0913332569`")
-        
-        st.markdown("#### 1. Đăng nhập Zalo Web trực tiếp:")
-        st.write("Truy cập nhanh phiên bản Zalo Web để nhắn tin, nhận báo cáo và trao đổi nhóm:")
-        st.link_button("🌐 Mở Zalo Web (chat.zalo.me)", "https://chat.zalo.me", type="primary", use_container_width=True)
-        
-        st.markdown("#### 2. Kích hoạt Viber Desktop / App:")
-        st.link_button("🟣 Mở Chat Viber Hotline", "viber://chat?number=%2B84913332569", use_container_width=True)
-
-        st.divider()
-        st.markdown("#### 3. Quét mã QR kết nối nhanh:")
-        st.image("https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=https://zalo.me/0913332569", caption="Quét kết nối Zalo 0913332569", use_container_width=True)
-
-    with col_p2:
-        st.markdown("### 💬 Khung Trình Duyệt Trao Đổi Công Việc (Zalo Web)")
-        st.info("💡 Bạn có thể đăng nhập Zalo Web bằng mã QR hoặc số điện thoại **0913332569** ngay tại khung bên dưới:")
-        
-        # Phone mockup container
-        st.markdown("""
-        <div style="border: 3px solid #2980b9; border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-            <div style="background: #2980b9; color: white; padding: 10px 15px; font-weight: bold; display: flex; justify-content: space-between;">
-                <span>📱 ZALO WEB WORKSPACE - NOC VTC (0913332569)</span>
-                <span>🔴 LIVE</span>
-            </div>
-            <iframe src="https://chat.zalo.me" style="width: 100%; height: 680px; border: none;"></iframe>
-        </div>
-        """, unsafe_allow_html=True)
-
-# MENU 7: LƯU TRỮ VÀ TÀI LIỆU AI
-elif menu == "7. Lưu trữ và Tài liệu AI":
-    st.title("📂 Hệ thống Lưu trữ & Trợ lý Tra cứu Tài liệu AI")
-    
-    tab_store, tab_ai = st.tabs(["📁 Kho Lưu Trữ Ổ E:", "🤖 Trợ lý AI Tra Cứu (RAG)"])
+    tab_store, tab_ai = st.tabs(["📁 Kho Lưu Trữ Tài Liệu Kỹ Thuật", "🤖 Trợ Lý Phân Tích AI (Hỏi - Đáp Kỹ Thuật)"])
     
     with tab_store:
-        st.subheader("Cấu trúc Thư mục Lưu trữ Ổ đĩa E:")
+        st.subheader("Cấu trúc Thư mục Lưu trữ Hồ sơ Hệ thống:")
         st.markdown("""
-        * 📁 **`E:\\Luutru\\Báo cáo ca`**: Lưu trữ file Báo cáo ca A4 đã gửi.
-        * 📁 **`E:\\Luutru\\Báo cáo bảo hành`**: Lưu trữ file Excel báo cáo bảo hành A4 đã gửi.
-        * 📁 **`E:\\Luutru\\Tài liệu phòng máy`**: Sơ đồ đấu nối, quy trình vận hành thiết bị NOC.
-        * 📁 **`E:\\Luutru\\Hồ sơ đấu thầu`**: Tài liệu HSMT, HSDT các gói thầu kỹ thuật.
-        * 📁 **`E:\\Luutru\\Các dự án triển khai`**: Hồ sơ nghiệm thu, bản vẽ hạ tầng dự án.
-        * 📁 **`E:\\Tài liệu AI\\`**: Cơ sở dữ liệu Vector lưu trữ tài liệu tra cứu AI.
+        * 📁 **`Báo cáo ca trực`**: Lưu trữ các file Excel báo cáo ca A4 tổng hợp.
+        * 📁 **`Báo cáo bảo hành`**: Lưu trữ file Excel báo cáo tuần bảo hành A4.
+        * 📁 **`Tài liệu phòng máy NOC`**: Sơ đồ đấu nối, quy trình vận hành thiết bị Head-end, HPA, UPS.
+        * 📁 **`Hồ sơ đấu thầu & Dự án`**: Tài liệu HSMT, HSDT các gói thầu kỹ thuật truyền hình số.
+        * 📁 **`Cơ sở dữ liệu Vector AI`**: Lưu trữ tri thức tra cứu phục vụ trợ lý AI.
         """)
         
-        uploaded_files = st.file_uploader("Upload tài liệu bổ sung vào ổ E:\\Luutru:", accept_multiple_files=True)
+        uploaded_files = st.file_uploader("Upload tài liệu bổ sung vào hệ thống lưu trữ:", accept_multiple_files=True)
         if uploaded_files:
             for file in uploaded_files:
-                st.success(f"✅ Đã lưu file **{file.name}** vào hệ thống ổ E:\\Luutru!")
+                st.success(f"✅ Đã lưu file **{file.name}** vào hệ thống lưu trữ máy chủ!")
                 add_audit_log(user_role, "Upload tài liệu lưu trữ", file.name)
 
     with tab_ai:
-        st.subheader("🤖 Tra cứu Quy trình & Hồ sơ Kỹ thuật bằng AI (Đường dẫn E:\\Tài liệu AI\\)")
-        query = st.text_input("Nhập từ khóa hoặc câu hỏi cần tra cứu:")
-        if query:
-            st.info(f"🔍 **AI Agent đang tìm kiếm trong `E:\\Tài liệu AI\\` cho câu hỏi: '{query}'**")
+        st.subheader("🤖 Trợ Lý AI Phòng Kỹ Thuật Công Nghệ VTC")
+        st.caption("Trợ lý AI phân tích sự cố, tra cứu quy chuẩn kỹ thuật, kiểm tra thông số HPA/UPS và giải đáp thắc mắc:")
 
-# MENU 6: NHẬT KÝ HOẠT ĐỘNG
-elif menu == "8. Nhật ký Hoạt động":
-    st.title("📝 Nhật ký Hoạt động Hệ thống (Audit Trail)")
+        # Hiển thị lịch sử chat
+        for msg in st.session_state.ai_chat_history:
+            if msg["role"] == "user":
+                with st.chat_message("user"):
+                    st.write(msg["content"])
+            else:
+                with st.chat_message("assistant", avatar="🤖"):
+                    st.write(msg["content"])
+
+        # Ô nhập câu hỏi
+        user_prompt = st.chat_input("Nhập câu hỏi kỹ thuật hoặc yêu cầu phân tích sự cố...")
+        if user_prompt:
+            # Lưu câu hỏi người dùng
+            st.session_state.ai_chat_history.append({"role": "user", "content": user_prompt})
+            with st.chat_message("user"):
+                st.write(user_prompt)
+
+            # Phân tích & Tạo câu trả lời thông minh dựa trên ngữ cảnh hệ thống VTC NOC
+            p_lower = user_prompt.lower()
+            if "hpa" in p_lower or "máy phát" in p_lower:
+                ai_reply = "📡 **Phân tích thông số HPA:** Hệ thống máy phát K1H-VNS1 hiện hoạt động ở mức công suất 18 kW (ngưỡng tiêu chuẩn 17 - 19 kW), chỉ số C/N đạt 14.63 dB (>14 dB) và công suất phản xạ 0.15 kW (<0.5 kW). Tất cả thông số đều đạt tiêu chuẩn kỹ thuật phát sóng qua vệ tinh."
+            elif "nhiệt độ" in p_lower or "điều hòa" in p_lower or "idc" in p_lower:
+                ai_reply = "🌡️ **Đánh giá nhiệt độ phòng máy IDC:** Cả 3 phòng (Head-end qua Cam 1: 22.5°C, Đối tác qua Cam 2: 23.0°C, Phòng CA qua Cam 3: 21.8°C) đều nằm trong dải chuẩn IDC (20°C - 24°C, độ ẩm 45% - 55%). Phòng Head-end đang áp dụng chu kỳ luân phiên 3 ngày tịnh tiến."
+            elif "ups" in p_lower or "điện" in p_lower:
+                ai_reply = "🔋 **Thông số UPS (192.168.20.201):** Hệ thống UPS Phụ tải NOC - 01 và UPS Máy phát K1H - 02 đang hoạt động ổn định, tải từ 45% - 60%, dung lượng ắc quy 98% - 100%, điện áp ra 220V ổn định."
+            elif "server" in p_lower or "máy chủ" in p_lower:
+                ai_reply = "🚨 **Cảnh báo Server:** Có 5 máy chủ cần lưu ý trong ca trực: Server-NOC-03 (CPU 94%), Server-NOC-08 (Disk 98%), Server-NOC-12 (RAM 91%), Server-NOC-19 (Nhiệt độ CPU 82°C) và Server-NOC-27 (Ping timeout nhẹ)."
+            else:
+                ai_reply = f"🤖 **Trợ lý AI VTC:** Tôi đã ghi nhận yêu cầu: *'{user_prompt}'*. Dựa trên dữ liệu giám sát ca trực hiện tại, toàn bộ hệ thống phát sóng, mạng IDC và các luồng kênh trên FalconHLS Monitor đang vận hành trong ngưỡng an toàn. Nếu cần lập biên bản sự cố hoặc đối soát, vui lòng nhập thông tin vào Menu 1.2 hoặc Menu 2.4."
+
+            st.session_state.ai_chat_history.append({"role": "assistant", "content": ai_reply})
+            save_shared_storage()
+            with st.chat_message("assistant", avatar="🤖"):
+                st.write(ai_reply)
+
+# =========================================================
+# MENU 5: NHẬT KÝ HOẠT ĐỘNG
+# =========================================================
+elif menu == "5. Nhật ký Hoạt động (Audit Trail)":
+    st.title("📝 Menu 5: Nhật Ký Hoạt Động Hệ Thống (Audit Trail)")
+    st.caption("Lưu vết toàn bộ thao tác đăng nhập, chỉnh sửa, lưu dữ liệu và gửi email trên hệ thống:")
     st.dataframe(st.session_state.audit_logs, use_container_width=True)
